@@ -269,6 +269,20 @@
       return { unit: P.createUnit(state, charId, grade), isNew };
     },
 
+    // 일괄 합성: 강화하지 않은 기본 유닛만 둘씩 묶음 (강화/메인/한정은 수동 합성)
+    bulkSynthesisPairs(state, grade) {
+      const pool = state.units
+        .filter(u => u.grade === grade && !u.enhance && P.charOf(u).type === 'Basic' && !P.synthesisSelfError(state, u))
+        .sort((a, b) => a.uid - b.uid);
+      const pairs = [];
+      for (let i = 0; i + 1 < pool.length; i += 2) pairs.push([pool[i].uid, pool[i + 1].uid]);
+      return pairs;
+    },
+
+    synthesizeBulk(state, grade, rng) {
+      return P.bulkSynthesisPairs(state, grade).map(([a, b]) => P.synthesize(state, a, b, rng));
+    },
+
     // ---- 4.6.1 강화 ----
     enhanceCost(unit) { return C().ENHANCE_COST_BASE * unit.grade * (unit.enhance + 1); },
     enhanceRate(unit) { return C().ENHANCE_RATES[unit.enhance]; },
@@ -363,6 +377,20 @@
     releaseError(state, unit) {
       if (P.isInParty(state, unit.uid)) return '파티에 편성된 유닛은 방출할 수 없습니다.';
       return null;
+    },
+
+    // 일괄 선택 대상: 파티 제외, 육성하지 않은(Lv.1 +0) 기본 유닛
+    bulkReleaseCandidates(state, grade) {
+      return state.units.filter(u => (!grade || u.grade === grade) && u.level === 1 && !u.enhance
+        && P.charOf(u).type === 'Basic' && !P.isInParty(state, u.uid));
+    },
+
+    releaseMany(state, uids) {
+      const units = uids.map(uid => P.findUnit(state, uid));
+      if (units.some(u => !u)) throw new Error('없는 유닛이 포함되어 있습니다.');
+      const err = units.map(u => P.releaseError(state, u)).find(Boolean);
+      if (err) throw new Error(err);
+      return uids.reduce((gold, uid) => gold + P.release(state, uid), 0);
     },
 
     release(state, uid) {

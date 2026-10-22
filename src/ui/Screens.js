@@ -211,12 +211,38 @@
       const filters = [0, 1, 2, 3, 4, 5, 6].map(g =>
         `<button class="chip ${view.unitFilter === g ? 'on' : ''}" data-action="filter" data-grade="${g}">${g ? '★' + g : '전체'}</button>`).join('');
       const list = sortUnits(state.units.filter(u => !view.unitFilter || u.grade === view.unitFilter));
+      const empty = '<p class="muted">해당 등급의 유닛이 없습니다.</p>';
+
+      // 선택 방출 모드
+      if (view.selecting) {
+        const sel = view.selected;
+        const gold = sel.reduce((g, uid) => g + P().releaseGold(P().findUnit(state, uid)), 0);
+        const tiles = list.map(u => unitTile(state, u, {
+          action: 'selToggle', selected: sel.includes(u.uid), disabled: !!P().releaseError(state, u)
+        })).join('');
+        return `<div class="screen">
+          ${topbar(state, '<h1>방출할 유닛 선택</h1>', 'selCancel')}
+          <div class="filters">${filters}</div>
+          <div class="card bulk-bar">
+            <span>${sel.length}명 선택 · 🪙 ${fmt(gold)}</span>
+            <button class="btn" data-action="selQuick">${view.unitFilter ? '★' + view.unitFilter + ' ' : ''}Lv.1 전체 선택</button>
+            <button class="btn" data-action="selClear" ${sel.length ? '' : 'disabled'}>선택 해제</button>
+            <button class="btn danger" data-action="releaseMany" ${sel.length ? '' : 'disabled'}>방출</button>
+          </div>
+          <p class="muted">파티 유닛은 방출할 수 없습니다. "Lv.1 전체 선택"은 키우지 않은 기본 유닛만 고릅니다.</p>
+          <div class="unit-grid">${tiles || empty}</div>
+        </div>`;
+      }
+
       const synthReady = state.units.filter(u => !P().synthesisSelfError(state, u) && P().synthesisCandidates(state, u.uid).length).length;
+      const bulk = [1, 2, 3, 4, 5].map(g => [g, P().bulkSynthesisPairs(state, g).length]).filter(([, n]) => n)
+        .map(([g, n]) => `<button class="btn primary" data-action="synthBulk" data-grade="${g}">★${g} 일괄 합성<small>${n}쌍 → ★${g + 1} ${n}명</small></button>`).join('');
       return `<div class="screen">
         ${topbar(state, `<h1>유닛 <small class="muted">${state.units.length}/${C().MAX_UNITS}</small></h1>`, 'lobby')}
-        ${synthReady ? `<div class="card">🔮 합성 가능한 유닛이 ${synthReady}명 있습니다. 최대 레벨 유닛을 눌러 합성하세요.</div>` : ''}
-        <div class="filters">${filters}</div>
-        <div class="unit-grid">${list.map(u => unitTile(state, u, { action: 'unit' })).join('') || '<p class="muted">해당 등급의 유닛이 없습니다.</p>'}</div>
+        ${synthReady ? `<div class="card">🔮 합성 가능한 유닛이 ${synthReady}명 있습니다. 최대 레벨 유닛을 눌러 합성하거나 일괄 합성하세요.
+          ${bulk ? `<div class="bulk-bar">${bulk}</div>` : ''}</div>` : ''}
+        <div class="filters">${filters}<button class="chip right" data-action="selStart">🗑️ 선택 방출</button></div>
+        <div class="unit-grid">${list.map(u => unitTile(state, u, { action: 'unit' })).join('') || empty}</div>
       </div>`;
     },
 
@@ -396,6 +422,37 @@
           <button class="btn ${limited ? 'danger' : 'primary'}" data-action="synthDo" data-a="${a}" data-b="${b}">합성</button>
         </div>
       </div>`;
+    },
+
+    synthBulkConfirm(state, grade) {
+      const n = P().bulkSynthesisPairs(state, grade).length;
+      return Screens.confirm('일괄 합성', `최대 레벨 ★${grade} 기본 유닛 ${n * 2}명을 둘씩 합성해 ★${grade + 1} 유닛 ${n}명을 얻습니다.<br>
+        <span class="muted">파티 유닛, 강화한 유닛, 메인/한정 캐릭터는 제외됩니다.</span>`, 'synthBulkDo', false, { grade });
+    },
+
+    // 여러 유닛 획득 결과 (일괄 합성)
+    revealMany(state, title, results) {
+      const tiles = results.map(r => unitTile(state, r.unit, { action: 'unit', extra: '' })
+        .replace('<div class="ut-badges">', `<div class="ut-badges">${r.isNew ? '<span class="badge new">NEW</span>' : ''}`)).join('');
+      return `<div class="modal">
+        <h2>${title}</h2>
+        <div class="unit-grid">${tiles}</div>
+        <div class="modal-actions"><button class="btn primary" data-action="closeModal">확인</button></div>
+      </div>`;
+    },
+
+    releaseManyConfirm(state, uids) {
+      const units = uids.map(uid => P().findUnit(state, uid));
+      const gold = units.reduce((g, u) => g + P().releaseGold(u), 0);
+      const byGrade = [1, 2, 3, 4, 5, 6].map(g => [g, units.filter(u => u.grade === g).length]).filter(([, n]) => n)
+        .map(([g, n]) => `★${g} ${n}명`).join(' · ');
+      const raised = units.filter(u => u.level > 1 || u.enhance).length;
+      const special = units.filter(u => P().charOf(u).type !== 'Basic').length;
+      const warns = [];
+      if (raised) warns.push(`레벨을 올렸거나 강화한 유닛 ${raised}명`);
+      if (special) warns.push(`메인/한정 캐릭터 ${special}명`);
+      return Screens.confirm('유닛 일괄 방출', `${byGrade} (총 ${units.length}명)을 방출하고 🪙 ${fmt(gold)}을 받습니다. 되돌릴 수 없습니다.
+        ${warns.length ? `<br><b>포함: ${warns.join(', ')}</b>` : ''}`, 'releaseManyDo', warns.length > 0);
     },
 
     reveal(state, title, got, again) {

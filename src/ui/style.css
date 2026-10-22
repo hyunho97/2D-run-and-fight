@@ -166,6 +166,10 @@ body.in-battle #game-wrap { visibility: visible; }
 
 /* ---- 필터 ---- */
 .filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.filters .right { margin-left: auto; }
+.bulk-bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+.card.bulk-bar { margin-top: 0; position: sticky; top: 0; z-index: 2; }
+.card.bulk-bar > span { font-weight: bold; margin-right: auto; }
 .chip { padding: 8px 14px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--line); font-size: 14px; }
 .chip.on { background: var(--accent); border-color: var(--accent); font-weight: bold; }
 

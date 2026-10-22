@@ -21,7 +21,7 @@
   const app = {
     state: G.SaveManager.load(),
     rng: G.createRng(Date.now()),
-    view: { screen: 'lobby', partySlot: 0, unitFilter: 0, unitUid: null },
+    view: { screen: 'lobby', partySlot: 0, unitFilter: 0, unitUid: null, selecting: false, selected: [] },
     battle: null,
     stageId: null,
     ui: { paused: false, speed: 1, auto: false, holdIndex: -1, hint: null },
@@ -252,7 +252,7 @@
     dungeons: () => go('dungeons'),
     dungeon: d => { app.view.dungeon = d.id; render(); },
     party: () => go('party'),
-    units: () => go('units'),
+    units: () => go('units', { selecting: false, selected: [] }),
     unit: d => go('unit', { unitUid: Number(d.uid) }),
     collection: () => go('collection'),
     colGrade: d => { app.view.colGrade = Number(d.grade); render(); },
@@ -341,6 +341,37 @@
       const warn = data.type !== 'Basic' ? '<br><b>메인/한정 캐릭터입니다. 다시 얻기 어렵습니다.</b>' : '';
       modal(S.confirm('유닛 방출', `${data.name} (★${u.grade} Lv.${u.level}${u.enhance ? ' +' + u.enhance : ''})을(를) 방출하고 🪙 ${P.releaseGold(u)}을 받습니다.${warn}`,
         'releaseDo', data.type !== 'Basic', { uid: u.uid }));
+    },
+    synthBulk: d => modal(S.synthBulkConfirm(app.state, Number(d.grade))),
+    synthBulkDo: d => {
+      const results = P.synthesizeBulk(app.state, Number(d.grade), app.rng);
+      save();
+      render();
+      modal(S.revealMany(app.state, `🔮 일괄 합성 결과 (${results.length}명)`, results));
+      G.Sound.play('reveal');
+    },
+    selStart: () => go('units', { selecting: true, selected: [] }),
+    selCancel: () => go('units', { selecting: false, selected: [] }),
+    selToggle: d => {
+      const uid = Number(d.uid);
+      const sel = app.view.selected;
+      app.view.selected = sel.includes(uid) ? sel.filter(x => x !== uid) : sel.concat(uid);
+      render();
+    },
+    selQuick: () => {
+      const add = P.bulkReleaseCandidates(app.state, app.view.unitFilter).map(u => u.uid);
+      app.view.selected = [...new Set(app.view.selected.concat(add))];
+      render();
+      if (!add.length) toast('선택할 Lv.1 유닛이 없습니다.');
+    },
+    selClear: () => { app.view.selected = []; render(); },
+    releaseMany: () => modal(S.releaseManyConfirm(app.state, app.view.selected)),
+    releaseManyDo: () => {
+      const n = app.view.selected.length;
+      const gold = P.releaseMany(app.state, app.view.selected);
+      save();
+      go('units', { selecting: false, selected: [] });
+      toast(`${n}명 방출 · 🪙 +${gold.toLocaleString('ko-KR')}`, 'good');
     },
     releaseDo: d => {
       const gold = P.release(app.state, Number(d.uid));

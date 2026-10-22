@@ -577,5 +577,37 @@ test('일일 던전: 골드 던전은 EXP 없음, 경험치 던전은 골드 없
   eq(r.drop, null);
 });
 
+test('일괄 합성: 강화·파티·메인 제외, 둘씩 짝지어 합성', G => {
+  const s = P(G).newState();
+  const mk = () => { const u = P(G).createUnit(s, 'BAS_0001'); u.level = 10; return u; };
+  const free = [mk(), mk(), mk()];
+  const enhanced = mk();
+  enhanced.enhance = 1;
+  P(G).findUnit(s, s.party.members[0]).level = 10;
+  eq(P(G).bulkSynthesisPairs(s, 1), [[free[0].uid, free[1].uid]]);
+  const before = s.units.length;
+  const got = P(G).synthesizeBulk(s, 1, () => 0);
+  eq(got.length, 1);
+  eq(got[0].unit.grade, 2);
+  eq(s.units.length, before - 1);
+  assert(P(G).findUnit(s, free[2].uid) && P(G).findUnit(s, enhanced.uid));
+});
+
+test('일괄 방출: Lv.1 미강화 비파티 기본 유닛 선택, 파티 포함 시 거부', G => {
+  const s = P(G).newState();
+  const raised = P(G).createUnit(s, 'BAS_0007');
+  raised.level = 2;
+  const cands = P(G).bulkReleaseCandidates(s, 0);
+  eq(cands.length, 3);
+  assert(cands.every(u => !P(G).isInParty(s, u.uid) && u.level === 1));
+  eq(P(G).bulkReleaseCandidates(s, 2).length, 0);
+  const gold = s.gold;
+  eq(P(G).releaseMany(s, cands.map(u => u.uid)), 90);
+  eq(s.gold - gold, 90);
+  let threw = false;
+  try { P(G).releaseMany(s, [raised.uid, s.party.members[0]]); } catch (e) { threw = true; }
+  assert(threw && P(G).findUnit(s, raised.uid), '파티 포함 시 아무것도 방출하지 않음');
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
