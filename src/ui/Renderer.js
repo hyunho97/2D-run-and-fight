@@ -21,7 +21,6 @@
     pauseBtn: { x: 24, y: 18, w: 72, h: 64 },
     speedBtn: { x: 1600, y: 18, w: 130, h: 64 },
     autoBtn: { x: 1746, y: 18, w: 150, h: 64 },
-    resultBtn: { x: 810, y: 770, w: 300, h: 90 },
 
     cellX(v) { return BAR_X + v * STRIDE; },
     cellIndexAt(px, py) {
@@ -85,21 +84,6 @@
       ctx.fillStyle = color;
       ctx.fill();
     }
-  }
-
-  function star(ctx, cx, cy, r, filled) {
-    ctx.beginPath();
-    for (let i = 0; i < 10; i++) {
-      const a = -Math.PI / 2 + i * Math.PI / 5;
-      const rad = i % 2 === 0 ? r : r * 0.45;
-      ctx.lineTo(cx + Math.cos(a) * rad, cy + Math.sin(a) * rad);
-    }
-    ctx.closePath();
-    ctx.fillStyle = filled ? '#FFD23F' : '#3a4055';
-    ctx.fill();
-    ctx.lineWidth = 4;
-    ctx.strokeStyle = filled ? '#b8860b' : '#22273a';
-    ctx.stroke();
   }
 
   function fmtTime(t) {
@@ -273,8 +257,6 @@
       this.drawBossBar();
       this.drawPanel(ui);
       this.drawBanners();
-      if (this.battle.isOver) this.drawResult();
-      else if (ui.paused) this.drawPause();
     }
 
     drawBackground() {
@@ -659,7 +641,10 @@
         rr(ctx, BAR_X - 10, Layout.BAR_Y - 10, pw + 20, CELL + 20, 24);
         ctx.fillStyle = 'rgba(10,12,20,0.55)';
         ctx.fill();
-        text(ctx, b.state === 'Moving' ? '전진 중…' : '웨이브 클리어!', W / 2, Layout.BAR_Y + CELL / 2, 40, '#c8d0e0', 'center', 'bold', 6);
+        rr(ctx, W / 2 - 170, Layout.BAR_Y + CELL / 2 - 36, 340, 72, 36);
+        ctx.fillStyle = 'rgba(18,22,34,0.92)';
+        ctx.fill();
+        text(ctx, b.state === 'Moving' ? '전진 중…' : '웨이브 클리어!', W / 2, Layout.BAR_Y + CELL / 2, 36, '#c8d0e0', 'center', 'bold', 6);
       }
 
       this.drawTooltip(ui);
@@ -710,9 +695,10 @@
         rr(ctx, x + 14, y + 14, 84, 84, 14);
         ctx.fillStyle = h.color;
         ctx.fill();
-        text(ctx, cls.glyph, x + 56, y + 58, 44, '#fff', 'center', 'bold', 5);
-        text(ctx, (h.isLeader ? '♛ ' : '') + h.name, x + 116, y + 32, 28, h.isLeader ? '#FFD23F' : '#ffffff', 'left');
-        text(ctx, `${cls.name} · ${cls.role}`, x + cw - 18, y + 32, 22, '#8a93a8', 'right', 'normal');
+        text(ctx, cls.glyph, x + 56, y + 50, 40, '#fff', 'center', 'bold', 5);
+        text(ctx, '★' + h.grade, x + 56, y + 84, 18, '#FFD23F', 'center', 'bold', 4);
+        text(ctx, (h.isLeader ? '♛ ' : '') + h.name, x + 116, y + 32, 24, h.isLeader ? '#FFD23F' : '#ffffff', 'left');
+        text(ctx, 'Lv.' + h.level, x + cw - 18, y + 32, 20, '#c8d0e0', 'right', 'bold');
         hpBar(ctx, x + 116, y + 62, cw - 136, 22, h.hpRatio, h.hpRatio > 0.3 ? '#5be36b' : '#ff5a5a');
         text(ctx, h.alive ? `${Math.ceil(h.hp)} / ${h.maxHp}` : '전투 불능', x + 116 + (cw - 136) / 2, y + 74, 20, '#ffffff', 'center', 'bold', 4);
         ctx.restore();
@@ -745,55 +731,6 @@
         }
         ctx.globalAlpha = 1;
       }
-    }
-
-    drawPause() {
-      const ctx = this.ctx;
-      ctx.fillStyle = 'rgba(5,8,15,0.6)';
-      ctx.fillRect(0, 0, W, H);
-      text(ctx, '일시정지', W / 2, H / 2 - 40, 90, '#ffffff', 'center', 'bold', 10);
-      text(ctx, '화면을 탭하거나 Space 키로 계속', W / 2, H / 2 + 50, 32, '#c8d0e0', 'center', 'normal', 6);
-    }
-
-    drawResult() {
-      const ctx = this.ctx;
-      const r = this.battle.result;
-      ctx.fillStyle = 'rgba(5,8,15,0.7)';
-      ctx.fillRect(0, 0, W, H);
-
-      const pw = 820;
-      const ph = 640;
-      const px = (W - pw) / 2;
-      const py = (H - ph) / 2;
-      rr(ctx, px, py, pw, ph, 28);
-      ctx.fillStyle = '#1d2333';
-      ctx.fill();
-      ctx.lineWidth = 6;
-      ctx.strokeStyle = r.victory ? '#FFD23F' : '#ff5a5a';
-      ctx.stroke();
-
-      text(ctx, r.victory ? '승리!' : '패배…', W / 2, py + 80, 84, r.victory ? '#FFD23F' : '#ff6b6b', 'center', 'bold', 10);
-      for (let i = 0; i < 3; i++) star(ctx, W / 2 + (i - 1) * 130, py + 200, 52, i < r.stars);
-
-      const lines = [
-        ['클리어', r.victory],
-        ['아군 사망 없음', r.victory && r.deaths === 0],
-        [`${C.STAR3_TIME}초 내 클리어`, r.victory && r.time <= C.STAR3_TIME]
-      ];
-      lines.forEach(([label, ok], i) => {
-        text(ctx, (ok ? '★ ' : '☆ ') + label, px + 90, py + 300 + i * 44, 28, ok ? '#FFD23F' : '#6b7390', 'left');
-      });
-      text(ctx, `시간 ${fmtTime(r.time)}`, px + pw - 90, py + 300, 28, '#ffffff', 'right');
-      text(ctx, `사망 ${r.deaths}`, px + pw - 90, py + 344, 28, '#ffffff', 'right');
-      if (r.rewards) {
-        text(ctx, `골드 +${r.rewards.gold}   EXP +${r.rewards.exp}`, W / 2, py + 470, 34, '#9fe7a8');
-      }
-
-      const btn = Layout.resultBtn;
-      rr(ctx, btn.x, btn.y, btn.w, btn.h, 20);
-      ctx.fillStyle = '#4f7be8';
-      ctx.fill();
-      text(ctx, '다시 하기', btn.x + btn.w / 2, btn.y + btn.h / 2 + 2, 38, '#ffffff');
     }
   }
 

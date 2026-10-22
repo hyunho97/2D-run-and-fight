@@ -17,32 +17,59 @@
     Hunter: { name: '사냥꾼', role: '서포터', damageType: 'Physical', range: 'Ranged', glyph: '사',
       skill: { name: '덫 깔기', kind: 'damage', coef: [0.45, 1.15, 2.0] } }
   };
+  G.ClassOrder = ['Warrior', 'Knight', 'Archer', 'Mage', 'Cleric', 'Hunter'];
 
   G.RangeValues = { Melee: 120, Ranged: 560 };
 
-  // 11.1 캐릭터 데이터 — 직업별 기본 유닛 1종씩
-  G.Characters = {
-    BAS_0001: { id: 'BAS_0001', name: '견습 전사', class: 'Warrior', type: 'Basic', grade: 1, element: 'Fire',
-      baseStats: { hp: 1500, atk: 70, def: 60, cri: 0.05, crd: 1.5, eva: 0.03, aspd: 0.8, pen: 0 },
-      blockColor: '#E0584A' },
-    BAS_0002: { id: 'BAS_0002', name: '견습 기사', class: 'Knight', type: 'Basic', grade: 1, element: 'Light',
-      baseStats: { hp: 1050, atk: 95, def: 40, cri: 0.08, crd: 1.5, eva: 0.03, aspd: 0.9, pen: 0.1 },
-      blockColor: '#F2B134' },
-    BAS_0003: { id: 'BAS_0003', name: '견습 궁수', class: 'Archer', type: 'Basic', grade: 1, element: 'Wind',
-      baseStats: { hp: 760, atk: 100, def: 25, cri: 0.12, crd: 1.6, eva: 0.08, aspd: 1.0, pen: 0 },
-      blockColor: '#4CB050' },
-    BAS_0004: { id: 'BAS_0004', name: '견습 마법사', class: 'Mage', type: 'Basic', grade: 1, element: 'Water',
-      baseStats: { hp: 700, atk: 115, def: 20, cri: 0.06, crd: 1.5, eva: 0.03, aspd: 0.7, pen: 0.2 },
-      blockColor: '#4F7BE8' },
-    BAS_0005: { id: 'BAS_0005', name: '견습 성직자', class: 'Cleric', type: 'Basic', grade: 1, element: 'Light',
-      baseStats: { hp: 820, atk: 90, def: 30, cri: 0.03, crd: 1.5, eva: 0.03, aspd: 0.7, pen: 0 },
-      blockColor: '#B57BE0' },
-    BAS_0006: { id: 'BAS_0006', name: '견습 사냥꾼', class: 'Hunter', type: 'Basic', grade: 1, element: 'Wind',
-      baseStats: { hp: 860, atk: 90, def: 30, cri: 0.1, crd: 1.5, eva: 0.06, aspd: 0.9, pen: 0 },
-      blockColor: '#2BB3A8' }
-  };
+  G.TypeLabels = { Basic: '기본', Main: '메인', Limited: '한정' };
 
-  // 6.1 / 6.2 적 데이터
+  // ---- 4.5 기본 유닛 카탈로그 ----
+  // 같은 직업은 같은 스탯·스킬, 이름과 의상 색상만 다른 바리에이션.
+  // 6직업 × 6등급 × 16색 = 576종. ★1 기본색(variant 0)이 BAS_0001~0006.
+  const CLASS_BASE = {
+    Warrior: { element: 'Fire', color: '#E0584A',
+      stats: { hp: 1500, atk: 70, def: 60, cri: 0.05, crd: 1.5, eva: 0.03, aspd: 0.8, pen: 0 } },
+    Knight: { element: 'Light', color: '#F2B134',
+      stats: { hp: 1050, atk: 95, def: 40, cri: 0.08, crd: 1.5, eva: 0.03, aspd: 0.9, pen: 0.1 } },
+    Archer: { element: 'Wind', color: '#4CB050',
+      stats: { hp: 760, atk: 100, def: 25, cri: 0.12, crd: 1.6, eva: 0.08, aspd: 1.0, pen: 0 } },
+    Mage: { element: 'Water', color: '#4F7BE8',
+      stats: { hp: 700, atk: 115, def: 20, cri: 0.06, crd: 1.5, eva: 0.03, aspd: 0.7, pen: 0.2 } },
+    Cleric: { element: 'Light', color: '#B57BE0',
+      stats: { hp: 820, atk: 90, def: 30, cri: 0.03, crd: 1.5, eva: 0.03, aspd: 0.7, pen: 0 } },
+    Hunter: { element: 'Wind', color: '#2BB3A8',
+      stats: { hp: 860, atk: 90, def: 30, cri: 0.1, crd: 1.5, eva: 0.06, aspd: 0.9, pen: 0 } }
+  };
+  const GRADE_TITLES = ['견습', '숙련', '정예', '베테랑', '영웅', '전설'];
+  const VARIANTS = [
+    ['', null], ['붉은', '#C0392B'], ['푸른', '#2E86DE'], ['초록', '#27AE60'],
+    ['황금', '#D4A017'], ['은빛', '#95A5B5'], ['검은', '#4A4E5A'], ['하얀', '#D9DEE6'],
+    ['보랏빛', '#8E44AD'], ['주홍', '#E67E22'], ['청록', '#16A085'], ['갈색', '#8B5A2B'],
+    ['분홍', '#E86FA4'], ['남색', '#34495E'], ['연두', '#9BC53D'], ['자주', '#A0306E']
+  ];
+
+  G.Characters = {};
+  let serial = 0;
+  for (let grade = 1; grade <= 6; grade++) {
+    VARIANTS.forEach(([prefix, color], variant) => {
+      for (const cls of G.ClassOrder) {
+        serial++;
+        const id = 'BAS_' + String(serial).padStart(4, '0');
+        const base = CLASS_BASE[cls];
+        G.Characters[id] = {
+          id, class: cls, type: 'Basic', grade, variant, element: base.element,
+          name: (prefix ? prefix + ' ' : '') + GRADE_TITLES[grade - 1] + ' ' + G.Classes[cls].name,
+          baseStats: base.stats,                 // ★1 Lv.1 기준. 등급/레벨/강화 배율은 G.Rules
+          blockColor: color || base.color
+        };
+      }
+    });
+  }
+
+  // 4.3 메인 캐릭터 — 상세 설계 보류. 형식만 정의 (type: 'Main' | 'Limited', grade: 4, skills 고유)
+  // 예) G.Characters.CHR_0001 = { id, name, class, type: 'Main', grade: 4, element, baseStats, blockColor, skills }
+
+  // ---- 6.1 / 6.2 적 데이터 ----
   G.Enemies = {
     MON_0001: { id: 'MON_0001', name: '슬라임', type: 'Melee', element: 'Water', range: 110,
       baseStats: { hp: 220, atk: 38, def: 15, aspd: 0.8 }, color: '#5FC79B', size: 70 },
@@ -50,25 +77,54 @@
       baseStats: { hp: 160, atk: 45, def: 10, aspd: 0.7 }, color: '#9A8F3C', size: 64 },
     MON_0003: { id: 'MON_0003', name: '오크 전사', type: 'Melee', element: 'Fire', range: 110,
       baseStats: { hp: 480, atk: 60, def: 35, aspd: 0.6 }, color: '#7A9A5A', size: 96 },
+    MON_0004: { id: 'MON_0004', name: '회색 늑대', type: 'Melee', element: 'Wind', range: 100,
+      baseStats: { hp: 260, atk: 32, def: 12, aspd: 1.2 }, color: '#8C8C9E', size: 66 },
+    MON_0005: { id: 'MON_0005', name: '버섯 술사', type: 'Ranged', element: 'Water', range: 480,
+      baseStats: { hp: 230, atk: 55, def: 8, aspd: 0.55 }, color: '#C75B7A', size: 62 },
     BOSS_0001: { id: 'BOSS_0001', name: '숲의 군주', type: 'Melee', element: 'Wind', range: 170, isBoss: true,
       baseStats: { hp: 2600, atk: 80, def: 45, aspd: 0.55 }, color: '#5B4A8A', size: 170,
       phases: [{ hpRatio: 0.5, aspdMult: 1.5 }],
-      pattern: { name: '대지 강타', interval: 9, castTime: 2, coef: 1.6 } }
+      pattern: { name: '대지 강타', interval: 9, castTime: 2, coef: 1.6 } },
+    BOSS_0002: { id: 'BOSS_0002', name: '거대 슬라임', type: 'Melee', element: 'Water', range: 150, isBoss: true,
+      baseStats: { hp: 1300, atk: 50, def: 25, aspd: 0.6 }, color: '#3FAE7E', size: 150,
+      phases: [{ hpRatio: 0.5, aspdMult: 1.4 }],
+      pattern: { name: '끈적한 덮치기', interval: 10, castTime: 2, coef: 1.2 } },
+    BOSS_0003: { id: 'BOSS_0003', name: '오크 족장', type: 'Melee', element: 'Fire', range: 160, isBoss: true,
+      baseStats: { hp: 1900, atk: 68, def: 40, aspd: 0.6 }, color: '#6E8B3D', size: 160,
+      phases: [{ hpRatio: 0.5, aspdMult: 1.5 }],
+      pattern: { name: '분쇄의 일격', interval: 8, castTime: 1.8, coef: 1.4 } }
   };
 
-  // 11.4 스테이지 데이터 (7.2 구조: 웨이브 3 + 보스)
-  G.Stages = {
-    STG_01_01: {
-      id: 'STG_01_01', chapter: 1, name: '1-1 숲의 입구',
-      waves: [
-        { monsters: ['MON_0001', 'MON_0001', 'MON_0002'] },
-        { monsters: ['MON_0002', 'MON_0003', 'MON_0001'] },
-        { monsters: ['MON_0003', 'MON_0003', 'MON_0002'] },
-        { monsters: ['BOSS_0001'], isBoss: true }
-      ],
-      rewards: { gold: 100, exp: 50, drops: [] }
-    }
-  };
+  // ---- 7.1 / 11.4 스테이지 (챕터 1: 숲, 10스테이지, 각 웨이브 3 + 보스) ----
+  const CHAPTER1 = [
+    ['숲의 입구', [['MON_0001', 'MON_0001'], ['MON_0001', 'MON_0002'], ['MON_0001', 'MON_0001', 'MON_0002']], 'BOSS_0002'],
+    ['이끼 낀 오솔길', [['MON_0001', 'MON_0002'], ['MON_0004', 'MON_0001'], ['MON_0001', 'MON_0004', 'MON_0002']], 'BOSS_0002'],
+    ['버섯 군락', [['MON_0005', 'MON_0001'], ['MON_0001', 'MON_0005', 'MON_0001'], ['MON_0004', 'MON_0005', 'MON_0005']], 'BOSS_0002'],
+    ['늑대의 영역', [['MON_0004', 'MON_0004'], ['MON_0004', 'MON_0004', 'MON_0002'], ['MON_0004', 'MON_0004', 'MON_0004']], 'BOSS_0003'],
+    ['고블린 야영지', [['MON_0002', 'MON_0002', 'MON_0001'], ['MON_0003', 'MON_0002'], ['MON_0003', 'MON_0002', 'MON_0002']], 'BOSS_0003'],
+    ['오래된 다리', [['MON_0003', 'MON_0005'], ['MON_0004', 'MON_0003', 'MON_0005'], ['MON_0003', 'MON_0003', 'MON_0002']], 'BOSS_0003'],
+    ['깊은 숲', [['MON_0004', 'MON_0005', 'MON_0001'], ['MON_0003', 'MON_0004', 'MON_0005'], ['MON_0004', 'MON_0004', 'MON_0003']], 'BOSS_0002'],
+    ['오크 정찰대', [['MON_0003', 'MON_0003'], ['MON_0003', 'MON_0004', 'MON_0002'], ['MON_0003', 'MON_0003', 'MON_0005']], 'BOSS_0003'],
+    ['군주의 정원', [['MON_0005', 'MON_0005', 'MON_0003'], ['MON_0003', 'MON_0003', 'MON_0004'], ['MON_0003', 'MON_0005', 'MON_0002']], 'BOSS_0003'],
+    ['숲의 군주', [['MON_0001', 'MON_0002', 'MON_0001'], ['MON_0002', 'MON_0003', 'MON_0001'], ['MON_0003', 'MON_0003', 'MON_0002']], 'BOSS_0001']
+  ];
 
-  G.DefaultParty = { members: ['BAS_0001', 'BAS_0004', 'BAS_0005'], leaderIndex: 0 };
+  G.Stages = {};
+  G.StageOrder = [];
+  CHAPTER1.forEach(([title, waves, boss], i) => {
+    const n = i + 1;
+    const id = 'STG_01_' + String(n).padStart(2, '0');
+    G.StageOrder.push(id);
+    G.Stages[id] = {
+      id, chapter: 1, index: n, name: `1-${n} ${title}`,
+      statMult: Math.round((1 + 0.13 * i) * 100) / 100,   // 적 HP/ATK/DEF 배율
+      waves: waves.map(monsters => ({ monsters })).concat([{ monsters: [boss], isBoss: true }]),
+      rewards: { gold: 100 + 30 * i, exp: 60 + 25 * i, firstClearGems: n === 10 ? 150 : 50 },
+      drops: [{ type: 'BasicUnit', grade: 1, chance: G.Config.STAGE_DROP_CHANCE }]
+    };
+  });
+
+  G.DefaultParty = { members: ['BAS_0001', 'BAS_0003', 'BAS_0004'], leaderIndex: 0 };
+  // 신규 플레이어 지급 유닛: 직업별 ★1 기본색 1명씩
+  G.StarterUnits = ['BAS_0001', 'BAS_0002', 'BAS_0003', 'BAS_0004', 'BAS_0005', 'BAS_0006'];
 })(window.Game = window.Game || {});

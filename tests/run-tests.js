@@ -8,6 +8,7 @@ const ROOT = path.join(__dirname, '..');
 const LOGIC_FILES = [
   'src/core.js',
   'src/config.js',
+  'src/rules.js',
   'src/data.js',
   'src/battle/StatusEffectSystem.js',
   'src/battle/DamageCalculator.js',
@@ -15,7 +16,8 @@ const LOGIC_FILES = [
   'src/battle/ChainResolver.js',
   'src/battle/BlockManager.js',
   'src/battle/SkillExecutor.js',
-  'src/battle/BattleManager.js'
+  'src/battle/BattleManager.js',
+  'src/meta/Progression.js'
 ];
 
 function loadGame() {
@@ -255,6 +257,220 @@ test('자동 모드로 1-1 스테이지 완주 (헤드리스)', G => {
   runUntil(b, () => false, 600);
   assert(b.isOver, 'battle finished');
   eq(b.state, 'Victory');
+});
+
+console.log('Rules / Catalog');
+
+test('최대 레벨 = 등급 × 10, 상위 등급 Lv.1 = 하위 등급 Max Lv 스탯', G => {
+  eq([1, 4, 6].map(g => G.Rules.maxLevel(g)), [10, 40, 60]);
+  const lowMax = G.Rules.gradeMultiplier(2) * G.Rules.levelMultiplier(20);
+  near(G.Rules.gradeMultiplier(3), lowMax, 1e-9);
+});
+
+test('기본 유닛 576종 (6직업 × 6등급 × 16색), 같은 직업은 같은 스탯', G => {
+  const basics = Object.values(G.Characters).filter(c => c.type === 'Basic');
+  eq(basics.length, 576);
+  eq(G.Characters.BAS_0001.name, '견습 전사');
+  const warriors = basics.filter(c => c.class === 'Warrior');
+  assert(warriors.every(c => c.baseStats === warriors[0].baseStats));
+  for (let g = 1; g <= 6; g++) eq(basics.filter(c => c.grade === g).length, 96);
+});
+
+test('챕터 1 = 10스테이지, 각 웨이브 3 + 보스', G => {
+  eq(G.StageOrder.length, 10);
+  for (const id of G.StageOrder) {
+    const s = G.Stages[id];
+    eq(s.waves.length, 4, id);
+    assert(s.waves[3].isBoss && G.Enemies[s.waves[3].monsters[0]].isBoss, id + ' boss');
+    s.waves.forEach(w => w.monsters.forEach(m => assert(G.Enemies[m], m)));
+  }
+});
+
+console.log('Progression');
+
+const P = G => G.Progression;
+function maxOut(G, unit) { unit.level = G.Rules.maxLevel(unit.grade); unit.exp = 0; }
+
+test('신규 데이터: 직업별 ★1 6명, 파티 3명', G => {
+  const s = P(G).newState();
+  eq(s.units.length, 6);
+  eq(s.party.members.length, 3);
+  eq(s.gems, G.Config.STARTING_GEMS);
+});
+
+test('경험치로 레벨업, 최대 레벨에서 멈춤', G => {
+  const s = P(G).newState();
+  const u = s.units[0];
+  const need = G.Rules.expToNext(1) + G.Rules.expToNext(2);
+  eq(P(G).addExp(s, u, need).to, 3);
+  P(G).addExp(s, u, 1e6);
+  eq([u.level, u.exp], [10, 0]);
+});
+
+test('첫 MAX LEVEL 보상은 유닛 종류별 1회', G => {
+  const s = P(G).newState();
+  const before = s.gems;
+  const a = s.units[0];
+  const r1 = P(G).addExp(s, a, 1e6);
+  assert(r1.firstMax, 'first reward');
+  eq(s.gems, before + G.Config.FIRST_MAX_GEMS_PER_GRADE);
+  const dup = P(G).createUnit(s, a.charId);
+  assert(!P(G).addExp(s, dup, 1e6).firstMax, 'no second reward');
+});
+
+test('스테이지 해금: 이전 스테이지 클리어 필요', G => {
+  const s = P(G).newState();
+  assert(P(G).isStageUnlocked(s, 'STG_01_01'));
+  assert(!P(G).isStageUnlocked(s, 'STG_01_02'));
+  P(G).applyBattleResult(s, { stageId: 'STG_01_01', victory: true, stars: 2, time: 80 }, () => 0.99);
+  assert(P(G).isStageUnlocked(s, 'STG_01_02'));
+});
+
+test('승리 보상: 골드·EXP·첫 클리어 보석, 별 최고 기록 유지 / 패배 시 보상 없음', G => {
+  const s = P(G).newState();
+  const res = (victory, stars) => ({ stageId: 'STG_01_01', victory, stars, time: 80 });
+  const first = P(G).applyBattleResult(s, res(true, 3), () => 0.99);
+  eq([first.firstClear, first.gems, s.gold], [true, 50, 100]);
+  const again = P(G).applyBattleResult(s, res(true, 1), () => 0.99);
+  eq([again.firstClear, again.gems, s.stages.STG_01_01.stars], [false, 0, 3]);
+  const lose = P(G).applyBattleResult(s, res(false, 0), () => 0.99);
+  eq([lose.gold, lose.exp, s.gold], [0, 0, 200]);
+});
+
+test('스테이지 드롭: ★1 기본 유닛', G => {
+  const s = P(G).newState();
+  const r = P(G).applyBattleResult(s, { stageId: 'STG_01_01', victory: true, stars: 1, time: 100 }, () => 0);
+  assert(r.drop && r.drop.unit.grade === 1);
+  eq(s.units.length, 7);
+});
+
+test('합성 조건: 같은 등급, 최대 레벨, 파티 제외', G => {
+  const s = P(G).newState();
+  const [a, b] = s.units.filter(u => !P(G).isInParty(s, u.uid));
+  assert(P(G).synthesisError(s, a.uid, b.uid), 'needs max level');
+  maxOut(G, a);
+  maxOut(G, b);
+  eq(P(G).synthesisError(s, a.uid, b.uid), null);
+  const partyUnit = P(G).findUnit(s, s.party.members[0]);
+  maxOut(G, partyUnit);
+  assert(P(G).synthesisError(s, a.uid, partyUnit.uid), 'party excluded');
+  const c = P(G).createUnit(s, 'BAS_0100');
+  maxOut(G, c);
+  assert(P(G).synthesisError(s, a.uid, c.uid), 'grade mismatch');
+});
+
+test('합성: 재료 2개 소모 → 한 단계 위 랜덤 기본 유닛 Lv.1', G => {
+  const s = P(G).newState();
+  const [a, b] = s.units.filter(u => !P(G).isInParty(s, u.uid));
+  maxOut(G, a);
+  maxOut(G, b);
+  const { unit } = P(G).synthesize(s, a.uid, b.uid, G.createRng(1));
+  eq([unit.grade, unit.level, s.units.length], [2, 1, 5]);
+  eq(P(G).charOf(unit).type, 'Basic');
+});
+
+test('★4 이상 합성 결과 메인 캐릭터 5%, 한정은 제외, 결과 등급 그대로', G => {
+  G.Characters.CHR_T1 = { id: 'CHR_T1', name: 'T', class: 'Knight', type: 'Main', grade: 4, baseStats: G.Characters.BAS_0002.baseStats, blockColor: '#fff' };
+  G.Characters.CHR_T2 = { id: 'CHR_T2', name: 'L', class: 'Knight', type: 'Limited', grade: 4, baseStats: G.Characters.BAS_0002.baseStats, blockColor: '#fff' };
+  const rng = G.createRng(9);
+  let mains = 0;
+  const N = 4000;
+  for (let i = 0; i < N; i++) {
+    const s = P(G).newState();
+    const a = P(G).createUnit(s, 'BAS_0450', 4);
+    const b = P(G).createUnit(s, 'BAS_0451', 4);
+    maxOut(G, a);
+    maxOut(G, b);
+    const { unit } = P(G).synthesize(s, a.uid, b.uid, rng);
+    eq(unit.grade, 5);
+    const type = P(G).charOf(unit).type;
+    assert(type !== 'Limited', 'limited excluded');
+    if (type === 'Main') mains++;
+  }
+  near(mains / N, 0.05, 0.012, 'main rate');
+});
+
+test('한정 캐릭터가 재료면 경고 필요', G => {
+  G.Characters.CHR_T2 = { id: 'CHR_T2', name: 'L', class: 'Knight', type: 'Limited', grade: 4, baseStats: G.Characters.BAS_0002.baseStats, blockColor: '#fff' };
+  const s = P(G).newState();
+  const lim = P(G).createUnit(s, 'CHR_T2', 4);
+  assert(P(G).needsLimitedWarning(s, [s.units[3].uid, lim.uid]));
+  assert(!P(G).needsLimitedWarning(s, [s.units[3].uid, s.units[4].uid]));
+});
+
+test('강화: 비용 차감, 실패 시 단계 유지, +5 상한', G => {
+  const s = P(G).newState();
+  s.gold = 1e6;
+  const u = s.units[0];
+  const cost = P(G).enhanceCost(u);
+  eq(P(G).enhance(s, u.uid, () => 0.99).success, true);   // +1 성공률 100%
+  eq(u.enhance, 1);
+  eq(s.gold, 1e6 - cost);
+  const fail = P(G).enhance(s, u.uid, () => 0.95);
+  eq([fail.success, u.enhance], [false, 1]);
+  while (u.enhance < 5) P(G).enhance(s, u.uid, () => 0);
+  assert(P(G).enhanceError(s, u));
+  const stats = P(G).unitStats(u);
+  eq(stats.atk, Math.round(70 * 1.25));
+});
+
+test('진화: 메인 캐릭터만, 최대 레벨 + +5 → 같은 유닛 다음 등급 Lv.1 +0', G => {
+  G.Characters.CHR_T1 = { id: 'CHR_T1', name: 'T', class: 'Knight', type: 'Main', grade: 4, baseStats: G.Characters.BAS_0002.baseStats, blockColor: '#fff' };
+  const s = P(G).newState();
+  const basic = s.units[0];
+  maxOut(G, basic);
+  basic.enhance = 5;
+  assert(P(G).evolveError(basic), 'basic cannot evolve');
+  const main = P(G).createUnit(s, 'CHR_T1');
+  eq(main.grade, 4);
+  maxOut(G, main);
+  assert(P(G).evolveError(main), 'needs +5');
+  main.enhance = 5;
+  P(G).evolve(s, main.uid);
+  eq([main.charId, main.grade, main.level, main.enhance], ['CHR_T1', 5, 1, 0]);
+});
+
+test('소환: 보석 소모, ★1/★2 기본 유닛', G => {
+  const s = P(G).newState();
+  const gems = s.gems;
+  const { unit } = P(G).summon(s, () => 0.9);
+  eq([s.gems, unit.grade], [gems - G.Config.SUMMON_COST, 2]);
+  s.gems = 0;
+  assert(P(G).summonError(s));
+});
+
+test('파티 배치: 같은 유닛을 다른 칸에 두면 자리 교체', G => {
+  const s = P(G).newState();
+  const [a, b, c] = s.party.members;
+  P(G).setPartyMember(s, 0, c);
+  eq(s.party.members, [c, b, a]);
+  const extra = s.units.find(u => !s.party.members.includes(u.uid));
+  P(G).setPartyMember(s, 1, extra.uid);
+  eq(s.party.members, [c, extra.uid, a]);
+});
+
+test('저장 데이터 검증: 손상 값 보정, 잘못된 데이터는 거부', G => {
+  const s = P(G).newState();
+  s.units[0].level = 999;
+  s.units[1].charId = 'NOPE';
+  s.party.members = [s.units[1].uid, s.units[1].uid];
+  const fixed = P(G).sanitize(JSON.parse(JSON.stringify(s)));
+  eq(fixed.units.length, 5);
+  eq(fixed.units[0].level, 10);
+  eq(fixed.party.members.length, 3);
+  assert(new Set(fixed.party.members).size === 3);
+  eq(P(G).sanitize({ version: 999 }), null);
+  eq(P(G).sanitize(null), null);
+});
+
+test('파티 엔트리로 전투 생성 (등급·레벨·강화 반영)', G => {
+  const s = P(G).newState();
+  const u = P(G).findUnit(s, s.party.members[0]);
+  u.level = 10;
+  u.enhance = 2;
+  const b = new G.BattleManager({ stageId: 'STG_01_01', party: P(G).partyEntries(s), leaderIndex: 0, seed: 1 });
+  eq(b.heroes[0].maxHp, P(G).unitStats(u).hp);
+  assert(b.heroes[0].maxHp > 1500);
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

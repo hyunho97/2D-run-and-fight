@@ -5,7 +5,7 @@
   let nextUid = 1;
 
   class Unit {
-    // opts: { side: 'hero'|'enemy', x, slot, isLeader, level, attackDelay, rangeJitter }
+    // opts: { side: 'hero'|'enemy', x, slot, isLeader, grade, level, enhance, statMult, attackDelay, rangeJitter }
     constructor(data, opts) {
       this.uid = nextUid++;
       this.data = data;
@@ -14,22 +14,13 @@
       this.slot = opts.slot || 0;
       this.isLeader = !!opts.isLeader;
       this.isBoss = !!data.isBoss;
+      this.grade = opts.grade || data.grade || 1;
       this.level = opts.level || 1;
+      this.enhance = opts.enhance || 0;
       this.element = data.element || null;
-
-      // 13.3 스탯(Lv) = 기본스탯 × (1 + 성장률 × (Lv - 1)), HP/ATK/DEF만 성장
-      const s = data.baseStats;
-      const growth = 1 + G.Config.STAT_GROWTH_PER_LEVEL * (this.level - 1);
-      this.stats = {
-        hp: Math.round(s.hp * growth),
-        atk: Math.round(s.atk * growth),
-        def: Math.round(s.def * growth),
-        cri: s.cri || 0,
-        crd: s.crd || 1.5,
-        eva: s.eva || 0,
-        aspd: s.aspd || 1,
-        pen: s.pen || 0
-      };
+      this.stats = Unit.computeStats(data, this.side === 'hero'
+        ? { grade: this.grade, level: this.level, enhance: this.enhance }
+        : { statMult: opts.statMult });
       this.maxHp = this.stats.hp;
       this.hp = this.maxHp;
 
@@ -54,6 +45,24 @@
     get aspd() { return this.stats.aspd * this.aspdMult * (this.berserk ? G.Config.BERSERK_ASPD_MULT : 1); }
     get hpRatio() { return this.hp / this.maxHp; }
     get color() { return this.data.blockColor || this.data.color; }
+
+    // HP/ATK/DEF만 등급·레벨·강화(아군) 또는 스테이지 배율(적)로 성장. 나머지는 고유값 (4.4.4)
+    static computeStats(data, o) {
+      const s = data.baseStats;
+      const mult = o.statMult != null
+        ? o.statMult
+        : G.Rules.gradeMultiplier(o.grade || 1) * G.Rules.levelMultiplier(o.level || 1) * G.Rules.enhanceMultiplier(o.enhance);
+      return {
+        hp: Math.round(s.hp * mult),
+        atk: Math.round(s.atk * mult),
+        def: Math.round(s.def * mult),
+        cri: s.cri || 0,
+        crd: s.crd || 1.5,
+        eva: s.eva || 0,
+        aspd: s.aspd || 1,
+        pen: s.pen || 0
+      };
+    }
   }
 
   G.Unit = Unit;

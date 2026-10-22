@@ -7,7 +7,7 @@
   const SES = () => G.StatusEffectSystem;
 
   class BattleManager {
-    // opts: { stageId, party: [characterId x3], leaderIndex, level, seed, auto }
+    // opts: { stageId, party: [characterId | { charId, grade, level, enhance }] x3, leaderIndex, level, seed, auto }
     constructor(opts) {
       const C = G.Config;
       this.stage = G.Stages[opts.stageId];
@@ -27,11 +27,13 @@
       this.result = null;
 
       const leaderIndex = opts.leaderIndex || 0;
-      this.heroes = opts.party.map((id, i) => {
-        const data = G.Characters[id];
-        if (!data) throw new Error('Unknown character: ' + id);
+      this.heroes = opts.party.map((entry, i) => {
+        const p = typeof entry === 'string' ? { charId: entry } : entry;
+        const data = G.Characters[p.charId];
+        if (!data) throw new Error('Unknown character: ' + p.charId);
         return new G.Unit(data, {
-          side: 'hero', slot: i, isLeader: i === leaderIndex, level: opts.level || 1,
+          side: 'hero', slot: i, isLeader: i === leaderIndex,
+          grade: p.grade, level: p.level || opts.level || 1, enhance: p.enhance,
           x: -i * C.FORMATION_GAP, attackDelay: 0.2 + this.rng() * 0.5
         });
       });
@@ -76,6 +78,7 @@
         if (!data) throw new Error('Unknown enemy: ' + id);
         const e = new G.Unit(data, {
           side: 'enemy',
+          statMult: this.stage.statMult || 1,
           x: front + C.WAVE_SPAWN_DISTANCE + i * C.ENEMY_GAP,
           attackDelay: 0.3 + this.rng() * 0.6,
           rangeJitter: data.isBoss ? 0 : this.rng() * C.ENEMY_RANGE_JITTER
@@ -321,8 +324,7 @@
         ? 1 + (this.deaths === 0 ? 1 : 0) + (this.time <= G.Config.STAR3_TIME ? 1 : 0)
         : 0;
       this.result = {
-        victory, stars, time: this.time, deaths: this.deaths,
-        rewards: victory ? this.stage.rewards : null
+        stageId: this.stage.id, victory, stars, time: this.time, deaths: this.deaths
       };
       this.emit(victory ? 'victory' : 'defeat', { result: this.result });
     }

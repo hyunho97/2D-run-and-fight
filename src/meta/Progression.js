@@ -1,0 +1,334 @@
+// 메타 진행 규칙 (8장 성장, 4.4 합성, 4.5.2 첫 MAX 보상, 4.6 강화/진화, 보상/소환).
+// 세이브 상태(state)를 직접 변경하는 순수 로직 — DOM/저장소에 의존하지 않음.
+(function (G) {
+  'use strict';
+
+  const C = () => G.Config;
+  const SAVE_VERSION = 1;
+  const poolCache = {};
+
+  function randomOf(list, rng) {
+    return list[Math.floor(rng() * list.length)];
+  }
+
+  const P = {
+    SAVE_VERSION,
+
+    // ---- 상태 생성 / 조회 ----
+    emptyState() {
+      return {
+        version: SAVE_VERSION, nextUid: 1, gold: 0, gems: C().STARTING_GEMS,
+        units: [], party: { members: [], leaderIndex: 0 },
+        stages: {}, firstMaxRewarded: {}, collection: {},
+        settings: { speed: 1, auto: false },
+        stats: { battles: 0, summons: 0, synths: 0 }
+      };
+    },
+
+    newState() {
+      const state = P.emptyState();
+      const starters = G.StarterUnits.map(id => P.createUnit(state, id));
+      const pick = cls => starters.find(u => P.charOf(u).class === cls).uid;
+      state.party.members = [pick('Warrior'), pick('Archer'), pick('Mage')];
+      return state;
+    },
+
+    createUnit(state, charId, grade) {
+      const data = G.Characters[charId];
+      if (!data) throw new Error('Unknown character: ' + charId);
+      const unit = { uid: state.nextUid++, charId, grade: grade || data.grade, level: 1, exp: 0, enhance: 0 };
+      state.units.push(unit);
+      state.collection[charId] = true;
+      return unit;
+    },
+
+    findUnit(state, uid) { return state.units.find(u => u.uid === uid) || null; },
+    charOf(unit) { return G.Characters[unit.charId]; },
+    isMaxLevel(unit) { return unit.level >= G.Rules.maxLevel(unit.grade); },
+    isInParty(state, uid) { return state.party.members.includes(uid); },
+    unitStats(unit) { return G.Unit.computeStats(P.charOf(unit), unit); },
+
+    // UI 표시용 전투력 (밸런스 공식 아님)
+    power(unit) {
+      const s = P.unitStats(unit);
+      return Math.round(s.hp * 0.2 + s.atk * 3 + s.def * 2);
+    },
+
+    partyUnits(state) { return state.party.members.map(uid => P.findUnit(state, uid)); },
+
+    partyEntries(state) {
+      return P.partyUnits(state).map(u => ({ charId: u.charId, grade: u.grade, level: u.level, enhance: u.enhance }));
+    },
+
+    // slot 자리에 uid 배치. 이미 다른 칸에 있으면 자리 교체
+    setPartyMember(state, slot, uid) {
+      if (!P.findUnit(state, uid)) return false;
+      const members = state.party.members;
+      const from = members.indexOf(uid);
+      if (from === slot) return false;
+      if (from >= 0) members[from] = members[slot];
+      members[slot] = uid;
+      return true;
+    },
+
+    setLeader(state, slot) { state.party.leaderIndex = slot; },
+
+    // ---- 스테이지 ----
+    isStageUnlocked(state, stageId) {
+      const i = G.StageOrder.indexOf(stageId);
+      if (i < 0) return false;
+      if (i === 0) return true;
+      const prev = state.stages[G.StageOrder[i - 1]];
+      return !!(prev && prev.cleared);
+    },
+
+    nextStageId(stageId) {
+      const i = G.StageOrder.indexOf(stageId);
+      return i >= 0 && i < G.StageOrder.length - 1 ? G.StageOrder[i + 1] : null;
+    },
+
+    // ---- 경험치 / 레벨 ----
+    addExp(state, unit, amount) {
+      const from = unit.level;
+      const max = G.Rules.maxLevel(unit.grade);
+      if (unit.level >= max) return { from, to: from, firstMax: null };
+      unit.exp += amount;
+      while (unit.level < max && unit.exp >= G.Rules.expToNext(unit.level)) {
+        unit.exp -= G.Rules.expToNext(unit.level);
+        unit.level++;
+      }
+      if (unit.level >= max) unit.exp = 0;
+      const firstMax = unit.level >= max ? P.grantFirstMax(state, unit) : null;
+      return { from, to: unit.level, firstMax };
+    },
+
+    // 4.5.2 유닛 종류별 최초 1회
+    grantFirstMax(state, unit) {
+      if (state.firstMaxRewarded[unit.charId]) return null;
+      state.firstMaxRewarded[unit.charId] = true;
+      const reward = {
+        gold: C().FIRST_MAX_GOLD_PER_GRADE * unit.grade,
+        gems: C().FIRST_MAX_GEMS_PER_GRADE * unit.grade
+      };
+      state.gold += reward.gold;
+      state.gems += reward.gems;
+      return reward;
+    },
+
+    // 전투 결과 반영. 패배 시 보상 없음
+    applyBattleResult(state, result, rng) {
+      const stage = G.Stages[result.stageId];
+      const summary = {
+        victory: result.victory, stars: result.stars, gold: 0, gems: 0, exp: 0,
+        firstClear: false, levelUps: [], firstMax: [], drop: null
+      };
+      state.stats.battles++;
+      if (!result.victory) return summary;
+
+      const rec = state.stages[stage.id] || (state.stages[stage.id] = { cleared: false, stars: 0, bestTime: null });
+      summary.firstClear = !rec.cleared;
+      rec.cleared = true;
+      rec.stars = Math.max(rec.stars, result.stars);
+      rec.bestTime = rec.bestTime == null ? result.time : Math.min(rec.bestTime, result.time);
+
+      summary.gold = stage.rewards.gold;
+      state.gold += summary.gold;
+      if (summary.firstClear) {
+        summary.gems = stage.rewards.firstClearGems || 0;
+        state.gems += summary.gems;
+      }
+
+      // 경험치 획득: 전투 참여 (4.4.1)
+      summary.exp = stage.rewards.exp;
+      for (const unit of P.partyUnits(state)) {
+        const r = P.addExp(state, unit, summary.exp);
+        const name = P.charOf(unit).name;
+        if (r.to > r.from) summary.levelUps.push({ uid: unit.uid, name, from: r.from, to: r.to, max: P.isMaxLevel(unit) });
+        if (r.firstMax) summary.firstMax.push(Object.assign({ uid: unit.uid, name }, r.firstMax));
+      }
+
+      for (const d of stage.drops || []) {
+        if (state.units.length >= C().MAX_UNITS) break;
+        if (rng() < d.chance) {
+          const charId = randomOf(P.basicPool(d.grade), rng).id;
+          const isNew = !state.collection[charId];
+          summary.drop = { unit: P.createUnit(state, charId), isNew };
+          break;
+        }
+      }
+      return summary;
+    },
+
+    // ---- 유닛 풀 ----
+    basicPool(grade) {
+      const key = 'basic' + grade;
+      if (!poolCache[key]) {
+        poolCache[key] = Object.values(G.Characters).filter(c => c.type === 'Basic' && c.grade === grade);
+      }
+      return poolCache[key];
+    },
+
+    // 합성 결과에 나올 수 있는 메인 캐릭터 (한정 제외, 4.4.2)
+    mainPool() {
+      return Object.values(G.Characters).filter(c => c.type === 'Main');
+    },
+
+    // ---- 4.4 합성 ----
+    synthesisSelfError(state, unit) {
+      if (unit.grade >= C().MAX_GRADE) return '★6은 최고 등급이라 합성할 수 없습니다.';
+      if (!P.isMaxLevel(unit)) return `최대 레벨(Lv.${G.Rules.maxLevel(unit.grade)})이 되어야 합성할 수 있습니다.`;
+      if (P.isInParty(state, unit.uid)) return '파티에 편성된 유닛은 재료로 쓸 수 없습니다.';
+      return null;
+    },
+
+    synthesisError(state, uidA, uidB) {
+      const a = P.findUnit(state, uidA);
+      const b = P.findUnit(state, uidB);
+      if (!a || !b || uidA === uidB) return '재료 유닛 2개를 선택하세요.';
+      if (a.grade !== b.grade) return '같은 등급끼리만 합성할 수 있습니다.';
+      return P.synthesisSelfError(state, a) || P.synthesisSelfError(state, b);
+    },
+
+    synthesisCandidates(state, uid) {
+      return state.units.filter(u => u.uid !== uid && !P.synthesisError(state, uid, u.uid));
+    },
+
+    // 4.4.3 한정 캐릭터 포함 시 경고 필요
+    needsLimitedWarning(state, uids) {
+      return uids.some(uid => {
+        const u = P.findUnit(state, uid);
+        return u && P.charOf(u).type === 'Limited';
+      });
+    },
+
+    synthesize(state, uidA, uidB, rng) {
+      const err = P.synthesisError(state, uidA, uidB);
+      if (err) throw new Error(err);
+      const grade = P.findUnit(state, uidA).grade + 1;
+      const mains = P.mainPool();
+      const charId = grade >= 4 && mains.length && rng() < C().SYNTH_MAIN_CHANCE
+        ? randomOf(mains, rng).id
+        : randomOf(P.basicPool(grade), rng).id;
+      const isNew = !state.collection[charId];
+      state.units = state.units.filter(u => u.uid !== uidA && u.uid !== uidB);
+      state.stats.synths++;
+      // 메인 캐릭터도 합성 결과 등급 그대로 지급 (4.4.2)
+      return { unit: P.createUnit(state, charId, grade), isNew };
+    },
+
+    // ---- 4.6.1 강화 ----
+    enhanceCost(unit) { return C().ENHANCE_COST_BASE * unit.grade * (unit.enhance + 1); },
+    enhanceRate(unit) { return C().ENHANCE_RATES[unit.enhance]; },
+
+    enhanceError(state, unit) {
+      if (unit.enhance >= C().ENHANCE_MAX) return `이미 최대 강화(+${C().ENHANCE_MAX})입니다.`;
+      if (state.gold < P.enhanceCost(unit)) return '골드가 부족합니다.';
+      return null;
+    },
+
+    // 실패 시 골드만 소모 (단계 유지)
+    enhance(state, uid, rng) {
+      const unit = P.findUnit(state, uid);
+      const err = P.enhanceError(state, unit);
+      if (err) throw new Error(err);
+      const cost = P.enhanceCost(unit);
+      state.gold -= cost;
+      const success = rng() < P.enhanceRate(unit);
+      if (success) unit.enhance++;
+      return { success, cost, enhance: unit.enhance };
+    },
+
+    // ---- 4.6.2 진화 (메인 캐릭터 전용) ----
+    evolveError(unit) {
+      if (P.charOf(unit).type === 'Basic') return '기본 유닛은 진화할 수 없습니다. 합성으로 상위 등급을 얻으세요.';
+      if (unit.grade >= C().MAX_GRADE) return '★6은 최고 등급입니다.';
+      if (!P.isMaxLevel(unit)) return '최대 레벨이 필요합니다.';
+      if (unit.enhance < C().ENHANCE_MAX) return `+${C().ENHANCE_MAX} 강화가 필요합니다.`;
+      return null;
+    },
+
+    evolve(state, uid) {
+      const unit = P.findUnit(state, uid);
+      const err = P.evolveError(unit);
+      if (err) throw new Error(err);
+      unit.grade++;
+      unit.level = 1;
+      unit.exp = 0;
+      unit.enhance = 0;
+      return unit;
+    },
+
+    // ---- 소환 (보석) ----
+    summonError(state) {
+      if (state.gems < C().SUMMON_COST) return '보석이 부족합니다.';
+      if (state.units.length >= C().MAX_UNITS) return '보관함이 가득 찼습니다. 합성으로 공간을 확보하세요.';
+      return null;
+    },
+
+    summon(state, rng) {
+      const err = P.summonError(state);
+      if (err) throw new Error(err);
+      state.gems -= C().SUMMON_COST;
+      const rates = C().SUMMON_GRADE_RATES;
+      let r = rng();
+      let grade = rates[rates.length - 1][0];
+      for (const [g, p] of rates) {
+        if (r < p) { grade = g; break; }
+        r -= p;
+      }
+      const charId = randomOf(P.basicPool(grade), rng).id;
+      const isNew = !state.collection[charId];
+      state.stats.summons++;
+      return { unit: P.createUnit(state, charId), isNew };
+    },
+
+    // ---- 저장 데이터 검증 (손상/구버전 데이터 방어) ----
+    sanitize(raw) {
+      if (!raw || raw.version !== SAVE_VERSION || !Array.isArray(raw.units)) return null;
+      const state = P.emptyState();
+      const num = (v, lo, hi, d) => (Number.isFinite(v) ? Math.min(hi, Math.max(lo, Math.floor(v))) : d);
+
+      const seen = new Set();
+      for (const u of raw.units) {
+        if (!u || !G.Characters[u.charId] || seen.has(u.uid) || !Number.isFinite(u.uid)) continue;
+        seen.add(u.uid);
+        const grade = num(u.grade, 1, C().MAX_GRADE, G.Characters[u.charId].grade);
+        state.units.push({
+          uid: u.uid, charId: u.charId, grade,
+          level: num(u.level, 1, G.Rules.maxLevel(grade), 1),
+          exp: num(u.exp, 0, 1e9, 0),
+          enhance: num(u.enhance, 0, C().ENHANCE_MAX, 0)
+        });
+      }
+      if (state.units.length < 3) return null;
+
+      state.nextUid = Math.max(num(raw.nextUid, 1, 1e9, 1), ...state.units.map(u => u.uid + 1));
+      state.gold = num(raw.gold, 0, 1e12, 0);
+      state.gems = num(raw.gems, 0, 1e12, 0);
+
+      const members = ((raw.party && raw.party.members) || []).filter((uid, i, arr) => seen.has(uid) && arr.indexOf(uid) === i);
+      for (const u of state.units) {
+        if (members.length >= 3) break;
+        if (!members.includes(u.uid)) members.push(u.uid);
+      }
+      state.party = { members: members.slice(0, 3), leaderIndex: num(raw.party && raw.party.leaderIndex, 0, 2, 0) };
+
+      for (const [id, rec] of Object.entries(raw.stages || {})) {
+        if (!G.Stages[id] || !rec) continue;
+        state.stages[id] = { cleared: !!rec.cleared, stars: num(rec.stars, 0, 3, 0), bestTime: Number.isFinite(rec.bestTime) ? rec.bestTime : null };
+      }
+      for (const key of ['firstMaxRewarded', 'collection']) {
+        for (const id of Object.keys(raw[key] || {})) if (G.Characters[id]) state[key][id] = true;
+      }
+      for (const u of state.units) state.collection[u.charId] = true;
+      if (raw.settings) {
+        state.settings.speed = raw.settings.speed === 2 ? 2 : 1;
+        state.settings.auto = !!raw.settings.auto;
+      }
+      Object.assign(state.stats, raw.stats);
+      return state;
+    }
+  };
+
+  G.Progression = P;
+})(window.Game = window.Game || {});
