@@ -258,6 +258,58 @@
       '....kdddk.kdddk...',
       '....kkkkk.kkkkk...'
     ],
+    yeti: [
+      '.....kkkkkk.....',
+      '....kcccccck....',
+      '...kcccnnnnck...',
+      '...kccnknnknk...',
+      '...kccnnnnnnk...',
+      '...kccnfnfnnk...',
+      '.kkkccnnnnckkk..',
+      'kcccccccccccccck',
+      'kcccclcccccllcck',
+      'kcck.kcccck.kcck',
+      'kcck.kcccck.kcck',
+      'knnk.kcccck.knnk',
+      'kkkk.kcccck.kkkk',
+      '...kccccckccck..',
+      '...kccck.kccck..',
+      '...kdddk.kdddk..',
+      '...kkkkk.kkkkk..'
+    ],
+    wisp: [
+      '....kk......',
+      '...kllk.....',
+      '..kllllkk...',
+      '.kllcclllk..',
+      'kllcccccllk.',
+      'klcckcckclk.',
+      'klcccccccclk',
+      '.kcccccccck.',
+      '..kdcccdck..',
+      '...kdcdck...',
+      '....kdk.....',
+      '.....k......'
+    ],
+    dragon: [
+      '.........kk...........k.k..',
+      '........kddk.........kckck.',
+      '.......kddldk.......kcccck.',
+      '......kddlldk......kccgcck.',
+      '.....kddllldk.....kccccccck',
+      '....kddlllldk....kcccckkkk.',
+      '...kddllllddk...kcccck.....',
+      '..kkdddddddk...kcccck......',
+      '.kcckkkkkkkkkkkcccck.......',
+      'kcccccccccccccccccck.......',
+      'kcccccccccccccccccck.......',
+      'kckcclllllllllllccck.......',
+      'kk.kcclllllllllcck.........',
+      '....kcck.....kcck..........',
+      '....kcck.....kcck..........',
+      '...kccck....kccck..........',
+      '...kkkkk....kkkkk..........'
+    ],
     sphinx: [
       '..............kkkk....',
       '.............kgxgxk...',
@@ -305,7 +357,14 @@
     BOSS_0003: { kind: 'humanoid', head: 'orc', skin: '#5f8a3a', hair: '#2b2b2b', costume: '#6e8b3d', weapon: 'axe', crown: true },
     BOSS_0004: { kind: 'scorpion', crown: true },
     BOSS_0005: { kind: 'golem' },
-    BOSS_0006: { kind: 'sphinx' }
+    BOSS_0006: { kind: 'sphinx' },
+    MON_0010: { kind: 'wolf' },
+    MON_0011: { kind: 'yeti' },
+    MON_0012: { kind: 'wisp', projectile: 'orb' },
+    MON_0013: { kind: 'humanoid', head: 'wizard', costume: '#3f6fc4', weapon: 'staff', projectile: 'orb' },
+    BOSS_0007: { kind: 'golem' },
+    BOSS_0008: { kind: 'humanoid', head: 'holy', skin: '#f2d6c0', hair: '#9fd0f5', costume: '#8fc4f0', weapon: 'holyStaff', crown: true, projectile: 'orb' },
+    BOSS_0009: { kind: 'dragon' }
   };
 
   // ---- 색 ----

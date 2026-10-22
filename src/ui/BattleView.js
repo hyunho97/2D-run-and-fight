@@ -42,6 +42,7 @@
     forest: { sky: ['#6ec3e8', '#d4f1fb'], far: '#93c4a0', prop: 'tree', ground: '#7a5a3a', groundTop: '#6aa84f' },
     desert: { sky: ['#f2a65a', '#fde8c0'], far: '#e0b878', prop: 'cactus', ground: '#c9965a', groundTop: '#e6c27f' },
     mine: { sky: ['#1e1a2b', '#4a3d52'], far: '#3a3045', prop: 'crystal', ground: '#4a3b30', groundTop: '#6b5a48' },
+    snow: { sky: ['#9fb8d6', '#eef4fb'], far: '#c9d8e8', prop: 'pine', ground: '#9fb0c4', groundTop: '#f4f8fc' },
     tower: { sky: ['#3b4a8a', '#c9a0c8'], far: '#6a6390', prop: 'pillar', ground: '#7a7480', groundTop: '#9a94a2' }
   };
 
@@ -187,6 +188,25 @@
             ctx.fillRect(x - w / 2 - 6 * s, base - 12 * s, w + 12 * s, 12 * s);
             ctx.fillStyle = 'rgba(0,0,0,0.12)';
             for (let j = 0; j < 3; j++) ctx.fillRect(x - w / 2 + (j + 0.5) * w / 3.5, base - h, 3 * s, h);
+          } else if (prop === 'pine') {
+            // 눈 덮인 침엽수
+            ctx.fillStyle = '#5a4030';
+            ctx.fillRect(x - 8 * s, base - 40 * s, 16 * s, 40 * s);
+            for (let j = 0; j < 3; j++) {
+              const y = base - 40 * s - j * 46 * s, w = (70 - j * 16) * s;
+              ctx.fillStyle = '#2f5d4a';
+              ctx.beginPath();
+              ctx.moveTo(x - w, y);
+              ctx.lineTo(x, y - 70 * s);
+              ctx.lineTo(x + w, y);
+              ctx.fill();
+              ctx.fillStyle = '#f4f8fc';
+              ctx.beginPath();
+              ctx.moveTo(x - w * 0.45, y - 38 * s);
+              ctx.lineTo(x, y - 70 * s);
+              ctx.lineTo(x + w * 0.45, y - 38 * s);
+              ctx.fill();
+            }
           } else if (prop === 'cactus') {
             if (k % 2) continue;
             ctx.fillStyle = '#5f9a4a';

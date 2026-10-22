@@ -114,7 +114,29 @@
     BOSS_0006: { id: 'BOSS_0006', name: '사막의 스핑크스', type: 'Melee', element: 'Light', range: 180, isBoss: true,
       baseStats: { hp: 3600, atk: 95, def: 55, aspd: 0.55 }, color: '#D4A64A', size: 185,
       phases: [{ hpRatio: 0.5, aspdMult: 1.6 }],
-      pattern: { name: '태양의 심판', interval: 8, castTime: 2, coef: 1.8 } }
+      pattern: { name: '태양의 심판', interval: 8, castTime: 2, coef: 1.8 } },
+
+    // 챕터 3: 설원
+    MON_0010: { id: 'MON_0010', name: '서리 늑대', type: 'Melee', element: 'Water', range: 100,
+      baseStats: { hp: 280, atk: 58, def: 25, aspd: 1.1 }, color: '#9cc8e8', size: 70 },
+    MON_0011: { id: 'MON_0011', name: '설인', type: 'Melee', element: 'Water', range: 120,
+      baseStats: { hp: 700, atk: 55, def: 45, aspd: 0.6 }, color: '#e8eef5', size: 96 },
+    MON_0012: { id: 'MON_0012', name: '얼음 정령', type: 'Ranged', element: 'Water', range: 480,
+      baseStats: { hp: 220, atk: 62, def: 15, aspd: 0.7 }, color: '#7fd6f0', size: 62 },
+    MON_0013: { id: 'MON_0013', name: '빙결 마법사', type: 'Ranged', element: 'Water', range: 520,
+      baseStats: { hp: 240, atk: 70, def: 12, aspd: 0.6 }, color: '#3f6fc4', size: 64 },
+    BOSS_0007: { id: 'BOSS_0007', name: '서리 거인', type: 'Melee', element: 'Water', range: 180, isBoss: true,
+      baseStats: { hp: 3800, atk: 95, def: 65, aspd: 0.5 }, color: '#a8c8e0', size: 185,
+      phases: [{ hpRatio: 0.5, aspdMult: 1.5 }],
+      pattern: { name: '빙하 강타', interval: 9, castTime: 2, coef: 1.7 } },
+    BOSS_0008: { id: 'BOSS_0008', name: '설원의 여왕', type: 'Melee', element: 'Light', range: 200, isBoss: true,
+      baseStats: { hp: 3400, atk: 110, def: 45, aspd: 0.6 }, color: '#8fc4f0', size: 165,
+      phases: [{ hpRatio: 0.5, aspdMult: 1.6 }],
+      pattern: { name: '눈보라', interval: 8, castTime: 2, coef: 1.8 } },
+    BOSS_0009: { id: 'BOSS_0009', name: '빙룡', type: 'Melee', element: 'Water', range: 200, isBoss: true,
+      baseStats: { hp: 4800, atk: 120, def: 70, aspd: 0.55 }, color: '#6fb7e0', size: 200,
+      phases: [{ hpRatio: 0.5, aspdMult: 1.6 }],
+      pattern: { name: '서리 숨결', interval: 8, castTime: 2.2, coef: 2.0 } }
   };
 
   // ---- 7.1 / 11.4 스테이지 (챕터당 10스테이지, 각 웨이브 3 + 보스) ----
@@ -149,6 +171,21 @@
         ['왕가의 계곡', [['MON_0009', 'MON_0009'], ['MON_0009', 'MON_0008', 'MON_0006'], ['MON_0009', 'MON_0009', 'MON_0008']], 'BOSS_0005'],
         ['피라미드 입구', [['MON_0006', 'MON_0009', 'MON_0008'], ['MON_0007', 'MON_0009', 'MON_0008'], ['MON_0009', 'MON_0009', 'MON_0007']], 'BOSS_0004'],
         ['사막의 스핑크스', [['MON_0006', 'MON_0007', 'MON_0008'], ['MON_0009', 'MON_0007', 'MON_0008'], ['MON_0009', 'MON_0009', 'MON_0008']], 'BOSS_0006']
+      ] },
+    { chapter: 3, name: '설원', theme: 'snow', multStart: 4.0, multStep: 0.2,
+      reward: { gold: [900, 60], exp: [700, 50], gems: 70, finalGems: 250 },
+      drops: [{ grade: 3, chance: 0.05 }, { grade: 2, chance: 0.2 }],
+      stages: [
+        ['얼어붙은 길', [['MON_0010', 'MON_0010'], ['MON_0010', 'MON_0012'], ['MON_0010', 'MON_0010', 'MON_0012']], 'BOSS_0007'],
+        ['눈보라 언덕', [['MON_0012', 'MON_0010'], ['MON_0011', 'MON_0010'], ['MON_0011', 'MON_0012', 'MON_0010']], 'BOSS_0007'],
+        ['빙하 동굴', [['MON_0012', 'MON_0012'], ['MON_0011', 'MON_0012', 'MON_0012'], ['MON_0013', 'MON_0012']], 'BOSS_0007'],
+        ['설인의 둥지', [['MON_0011', 'MON_0011'], ['MON_0011', 'MON_0010', 'MON_0011'], ['MON_0011', 'MON_0011', 'MON_0012']], 'BOSS_0008'],
+        ['서리 마법사의 탑', [['MON_0013', 'MON_0010'], ['MON_0013', 'MON_0012', 'MON_0010'], ['MON_0013', 'MON_0013', 'MON_0011']], 'BOSS_0008'],
+        ['얼음 호수', [['MON_0010', 'MON_0010', 'MON_0010'], ['MON_0012', 'MON_0012', 'MON_0011'], ['MON_0010', 'MON_0013', 'MON_0011']], 'BOSS_0007'],
+        ['백야의 숲', [['MON_0011', 'MON_0013'], ['MON_0010', 'MON_0011', 'MON_0013'], ['MON_0011', 'MON_0011', 'MON_0013']], 'BOSS_0008'],
+        ['얼음 궁전 정원', [['MON_0013', 'MON_0013', 'MON_0012'], ['MON_0011', 'MON_0013', 'MON_0012'], ['MON_0011', 'MON_0011', 'MON_0013']], 'BOSS_0008'],
+        ['얼음 궁전', [['MON_0010', 'MON_0011', 'MON_0013'], ['MON_0011', 'MON_0012', 'MON_0013'], ['MON_0011', 'MON_0011', 'MON_0013']], 'BOSS_0007'],
+        ['빙룡의 둥지', [['MON_0010', 'MON_0012', 'MON_0013'], ['MON_0011', 'MON_0013', 'MON_0012'], ['MON_0011', 'MON_0011', 'MON_0013']], 'BOSS_0009']
       ] }
   ];
 
@@ -176,21 +213,22 @@
   }
 
   // ---- 7.3 일일 던전: 골드/경험치 전용, 하루 보상 횟수 제한 ----
-  // 난이도별 적 배율과 보상은 해금 조건 스테이지를 기준으로 한다. bosses: [챕터 1 구간, 챕터 2 구간]
+  // 난이도별 적 배율과 보상은 해금 조건 스테이지를 기준으로 한다. bosses: 챕터별 구간 보스
   G.Dungeons = [
     { id: 'gold', name: '황금 광산', icon: '🪙', theme: 'mine', reward: 'gold',
       desc: '골드를 많이 주는 던전. 강화 비용을 모으세요.',
-      waves: [['MON_0002', 'MON_0001'], ['MON_0003', 'MON_0002'], ['MON_0003', 'MON_0002', 'MON_0002']], bosses: ['BOSS_0003', 'BOSS_0005'] },
+      waves: [['MON_0002', 'MON_0001'], ['MON_0003', 'MON_0002'], ['MON_0003', 'MON_0002', 'MON_0002']], bosses: ['BOSS_0003', 'BOSS_0005', 'BOSS_0007'] },
     { id: 'exp', name: '수련의 탑', icon: '📘', theme: 'tower', reward: 'exp',
       desc: '경험치를 많이 주는 던전. 합성 재료를 빠르게 키우세요.',
-      waves: [['MON_0005', 'MON_0001'], ['MON_0009', 'MON_0005'], ['MON_0009', 'MON_0008', 'MON_0005']], bosses: ['BOSS_0002', 'BOSS_0006'] }
+      waves: [['MON_0005', 'MON_0001'], ['MON_0009', 'MON_0005'], ['MON_0009', 'MON_0008', 'MON_0005']], bosses: ['BOSS_0002', 'BOSS_0006', 'BOSS_0008'] }
   ];
   G.DungeonLevels = [
     { unlock: 'STG_01_03', label: '초급' },
     { unlock: 'STG_01_07', label: '중급' },
     { unlock: 'STG_01_10', label: '상급' },
     { unlock: 'STG_02_05', label: '고급' },
-    { unlock: 'STG_02_10', label: '지옥' }
+    { unlock: 'STG_02_10', label: '지옥' },
+    { unlock: 'STG_03_05', label: '극한' }
   ];
   for (const d of G.Dungeons) {
     d.stageIds = G.DungeonLevels.map((lv, i) => {
