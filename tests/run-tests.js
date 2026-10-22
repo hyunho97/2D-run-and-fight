@@ -244,7 +244,7 @@ test('블록 탭 → 체인 수만큼 스킬 발동 후 블록 제거', G => {
   eq(b.blocks.slots.length, 0);
 });
 
-test('성직자 회복 = ATK x 10/20/30%, 최대 HP 초과 불가', G => {
+test('성직자 회복 = ATK x 50/120/200%, 최대 HP 초과 불가', G => {
   const b = newBattle(G);
   runUntil(b, () => b.isCombat, 30);
   const cleric = b.heroes[2];
@@ -252,7 +252,7 @@ test('성직자 회복 = ATK x 10/20/30%, 최대 HP 초과 불가', G => {
   tank.hp = 100;
   b.blocks.slots = [{ owner: cleric.uid }, { owner: cleric.uid }];
   b.tapBlock(0);
-  eq(tank.hp, 100 + Math.round(cleric.atk * 0.2));
+  eq(tank.hp, 100 + Math.round(cleric.atk * 1.2));
   tank.hp = tank.maxHp - 1;
   b.blocks.slots = [{ owner: cleric.uid }];
   b.tapBlock(0);

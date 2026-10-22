@@ -13,7 +13,7 @@
     Mage: { name: '마법사', role: '딜러', damageType: 'Magic', range: 'Ranged', glyph: '마',
       skill: { name: '에너지볼트', kind: 'damage', coef: [0.45, 1.15, 2.0] } },
     Cleric: { name: '성직자', role: '힐러', damageType: 'Magic', range: 'Ranged', glyph: '성',
-      skill: { name: '하급 치유', kind: 'heal', coef: [0.10, 0.20, 0.30] } },
+      skill: { name: '하급 치유', kind: 'heal', coef: [0.5, 1.2, 2.0] } },   // 기획서 10/20/30%에서 상향 (시뮬레이션 기준)
     Hunter: { name: '사냥꾼', role: '서포터', damageType: 'Physical', range: 'Ranged', glyph: '사',
       skill: { name: '덫 깔기', kind: 'damage', coef: [0.45, 1.15, 2.0] } }
   };
