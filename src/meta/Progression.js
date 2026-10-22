@@ -23,6 +23,7 @@
         settings: { speed: 1, auto: false, sfx: true, bgm: true },
         tutorialDone: false,
         collectionClaimed: [],
+        daily: { date: '', runs: {} },   // 7.3 일일 던전: 로컬 날짜(YYYY-MM-DD)별 보상 횟수
         stats: { battles: 0, summons: 0, synths: 0 }
       };
     },
@@ -77,11 +78,31 @@
 
     // ---- 스테이지 ----
     isStageUnlocked(state, stageId) {
+      const stage = G.Stages[stageId];
+      if (stage && stage.mode === 'daily') return P.isCleared(state, stage.unlock);
       const i = G.StageOrder.indexOf(stageId);
       if (i < 0) return false;
       if (i === 0) return true;
       const prev = state.stages[G.StageOrder[i - 1]];
       return !!(prev && prev.cleared);
+    },
+
+    isCleared(state, stageId) { return !!(state.stages[stageId] && state.stages[stageId].cleared); },
+
+    // ---- 7.3 일일 던전 ----
+    dailyRunsUsed(state, dungeonId, today) {
+      return state.daily.date === today ? state.daily.runs[dungeonId] || 0 : 0;
+    },
+
+    dailyRunsLeft(state, dungeonId, today) {
+      return Math.max(0, C().DAILY_DUNGEON_RUNS - P.dailyRunsUsed(state, dungeonId, today));
+    },
+
+    dungeonError(state, stageId, today) {
+      const stage = G.Stages[stageId];
+      if (!P.isStageUnlocked(state, stageId)) return `${G.Stages[stage.unlock].name} 클리어 후 열립니다.`;
+      if (!P.dailyRunsLeft(state, stage.dungeon, today)) return '오늘 보상 횟수를 모두 사용했습니다. 내일 다시 도전하세요.';
+      return null;
     },
 
     nextStageId(stageId) {
@@ -90,7 +111,8 @@
     },
 
     // 로비 추천 행동: { text, action }
-    recommendation(state) {
+    // today가 주어지면 남은 일일 던전 보상도 안내
+    recommendation(state, today) {
       const first = G.StageOrder[0];
       if (!(state.stages[first] && state.stages[first].cleared)) {
         return { text: '⚔️ 모험에서 1-1을 시작해 보세요. 블록을 눌러 스킬을 쓰는 게임입니다!', action: 'stages' };
@@ -100,6 +122,8 @@
       const synth = state.units.find(u => !P.synthesisSelfError(state, u) && P.synthesisCandidates(state, u.uid).length);
       if (synth) return { text: `🔮 합성할 수 있는 ★${synth.grade} 유닛이 있어요. 합성하면 ★${synth.grade + 1}을 얻습니다.`, action: 'unit', uid: synth.uid };
       if (!P.summonError(state)) return { text: '✨ 보석이 충분해요. 소환으로 동료를 늘리면 합성 재료가 됩니다.', action: 'summon' };
+      const dungeon = today && G.Dungeons.find(d => P.isStageUnlocked(state, d.stageIds[0]) && P.dailyRunsLeft(state, d.id, today));
+      if (dungeon) return { text: `${dungeon.icon} 오늘의 ${dungeon.name} 보상이 남아 있어요. 일일 던전에서 ${dungeon.reward === 'gold' ? '골드' : '경험치'}를 모으세요.`, action: 'dungeons' };
       const next = G.StageOrder.find(id => !(state.stages[id] && state.stages[id].cleared));
       if (next) return { text: `⚔️ 다음 목표: ${G.Stages[next].name}. 막히면 파티에 없는 유닛도 키워서 합성하세요.`, action: 'stages' };
       return { text: '🏆 모든 스테이지를 클리어했습니다! 별 3개에 도전해 보세요.', action: 'stages' };
@@ -134,20 +158,31 @@
     },
 
     // 전투 결과 반영. 패배 시 보상 없음
-    applyBattleResult(state, result, rng) {
+    // 일일 던전은 승리 시 보상 횟수 1회 차감 (today: 로컬 날짜 문자열)
+    applyBattleResult(state, result, rng, today) {
       const stage = G.Stages[result.stageId];
+      const daily = stage.mode === 'daily';
       const summary = {
         victory: result.victory, stars: result.stars, gold: 0, gems: 0, exp: 0,
-        firstClear: false, levelUps: [], firstMax: [], drop: null
+        firstClear: false, levelUps: [], firstMax: [], drop: null, daily, runsLeft: null
       };
       state.stats.battles++;
-      if (!result.victory) return summary;
+      if (!result.victory) {
+        if (daily) summary.runsLeft = P.dailyRunsLeft(state, stage.dungeon, today);
+        return summary;
+      }
 
-      const rec = state.stages[stage.id] || (state.stages[stage.id] = { cleared: false, stars: 0, bestTime: null });
-      summary.firstClear = !rec.cleared;
-      rec.cleared = true;
-      rec.stars = Math.max(rec.stars, result.stars);
-      rec.bestTime = rec.bestTime == null ? result.time : Math.min(rec.bestTime, result.time);
+      if (daily) {
+        if (state.daily.date !== today) state.daily = { date: today, runs: {} };
+        state.daily.runs[stage.dungeon] = (state.daily.runs[stage.dungeon] || 0) + 1;
+        summary.runsLeft = P.dailyRunsLeft(state, stage.dungeon, today);
+      } else {
+        const rec = state.stages[stage.id] || (state.stages[stage.id] = { cleared: false, stars: 0, bestTime: null });
+        summary.firstClear = !rec.cleared;
+        rec.cleared = true;
+        rec.stars = Math.max(rec.stars, result.stars);
+        rec.bestTime = rec.bestTime == null ? result.time : Math.min(rec.bestTime, result.time);
+      }
 
       summary.gold = stage.rewards.gold;
       state.gold += summary.gold;
@@ -158,7 +193,7 @@
 
       // 경험치 획득: 전투 참여 (4.4.1)
       summary.exp = stage.rewards.exp;
-      for (const unit of P.partyUnits(state)) {
+      for (const unit of summary.exp ? P.partyUnits(state) : []) {
         const r = P.addExp(state, unit, summary.exp);
         const name = P.charOf(unit).name;
         if (r.to > r.from) summary.levelUps.push({ uid: unit.uid, name, from: r.from, to: r.to, max: P.isMaxLevel(unit) });
@@ -372,7 +407,7 @@
       state.party = { members: members.slice(0, 3), leaderIndex: num(raw.party && raw.party.leaderIndex, 0, 2, 0) };
 
       for (const [id, rec] of Object.entries(raw.stages || {})) {
-        if (!G.Stages[id] || !rec) continue;
+        if (!G.Stages[id] || G.Stages[id].mode || !rec) continue;
         state.stages[id] = { cleared: !!rec.cleared, stars: num(rec.stars, 0, 3, 0), bestTime: Number.isFinite(rec.bestTime) ? rec.bestTime : null };
       }
       for (const key of ['firstMaxRewarded', 'collection']) {
@@ -387,6 +422,13 @@
       }
       const milestones = C().COLLECTION_MILESTONES.map(m => m[0]);
       state.collectionClaimed = (raw.collectionClaimed || []).filter((n, i, arr) => milestones.includes(n) && arr.indexOf(n) === i);
+      if (raw.daily && typeof raw.daily.date === 'string') {
+        state.daily.date = raw.daily.date;
+        for (const d of G.Dungeons) {
+          const n = raw.daily.runs && raw.daily.runs[d.id];
+          if (n) state.daily.runs[d.id] = num(n, 0, C().DAILY_DUNGEON_RUNS, 0);
+        }
+      }
       state.tutorialDone = !!raw.tutorialDone || !!(state.stages.STG_01_01 && state.stages.STG_01_01.cleared);
       Object.assign(state.stats, raw.stats);
       return state;

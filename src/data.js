@@ -175,6 +175,43 @@
     });
   }
 
+  // ---- 7.3 일일 던전: 골드/경험치 전용, 하루 보상 횟수 제한 ----
+  // 난이도별 적 배율과 보상은 해금 조건 스테이지를 기준으로 한다. bosses: [챕터 1 구간, 챕터 2 구간]
+  G.Dungeons = [
+    { id: 'gold', name: '황금 광산', icon: '🪙', theme: 'mine', reward: 'gold',
+      desc: '골드를 많이 주는 던전. 강화 비용을 모으세요.',
+      waves: [['MON_0002', 'MON_0001'], ['MON_0003', 'MON_0002'], ['MON_0003', 'MON_0002', 'MON_0002']], bosses: ['BOSS_0003', 'BOSS_0005'] },
+    { id: 'exp', name: '수련의 탑', icon: '📘', theme: 'tower', reward: 'exp',
+      desc: '경험치를 많이 주는 던전. 합성 재료를 빠르게 키우세요.',
+      waves: [['MON_0005', 'MON_0001'], ['MON_0009', 'MON_0005'], ['MON_0009', 'MON_0008', 'MON_0005']], bosses: ['BOSS_0002', 'BOSS_0006'] }
+  ];
+  G.DungeonLevels = [
+    { unlock: 'STG_01_03', label: '초급' },
+    { unlock: 'STG_01_07', label: '중급' },
+    { unlock: 'STG_01_10', label: '상급' },
+    { unlock: 'STG_02_05', label: '고급' },
+    { unlock: 'STG_02_10', label: '지옥' }
+  ];
+  for (const d of G.Dungeons) {
+    d.stageIds = G.DungeonLevels.map((lv, i) => {
+      const id = 'DGN_' + d.id.toUpperCase() + '_' + (i + 1);
+      const ref = G.Stages[lv.unlock];
+      const mult = G.Config.DUNGEON_REWARD_MULT;
+      G.Stages[id] = {
+        id, mode: 'daily', dungeon: d.id, index: i + 1, unlock: lv.unlock, theme: d.theme,
+        name: d.name + ' ' + lv.label, statMult: ref.statMult,
+        waves: d.waves.map(monsters => ({ monsters })).concat([{ monsters: [d.bosses[ref.chapter - 1]], isBoss: true }]),
+        rewards: {
+          gold: d.reward === 'gold' ? ref.rewards.gold * mult : 0,
+          exp: d.reward === 'exp' ? ref.rewards.exp * mult : 0,
+          firstClearGems: 0
+        },
+        drops: []
+      };
+      return id;
+    });
+  }
+
   G.DefaultParty = { members: ['BAS_0001', 'BAS_0003', 'BAS_0004'], leaderIndex: 0 };
   // 신규 플레이어 지급 유닛: 직업별 ★1 기본색 1명씩
   G.StarterUnits = ['BAS_0001', 'BAS_0002', 'BAS_0003', 'BAS_0004', 'BAS_0005', 'BAS_0006'];

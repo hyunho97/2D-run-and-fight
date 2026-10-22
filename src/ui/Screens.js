@@ -90,7 +90,9 @@
         </div>`;
       }).join('');
 
-      const rec = P().recommendation(state);
+      const rec = P().recommendation(state, G.today());
+      const dungeonsOpen = G.Dungeons.some(d => P().isStageUnlocked(state, d.stageIds[0]));
+      const runsLeft = G.Dungeons.reduce((n, d) => n + P().dailyRunsLeft(state, d.id, G.today()), 0);
       return `<div class="screen">
         ${topbar(state, '<div class="logo">BLOCK CHAIN RPG</div>')}
         <button class="guide" data-action="${rec.action}" ${rec.uid ? `data-uid="${rec.uid}"` : ''}>${esc(rec.text)} <span>›</span></button>
@@ -101,6 +103,8 @@
         <nav class="menu-grid">
           <button class="menu-btn primary" data-action="stages">⚔️<b>모험</b>
             <small>${cleared}/${G.StageOrder.length} 클리어${next ? ` · 다음: ${esc(G.Stages[next].name)}` : ' · 전부 클리어!'}</small></button>
+          <button class="menu-btn" data-action="dungeons">🏰<b>일일 던전</b>
+            <small>${dungeonsOpen ? `오늘 남은 보상 ${runsLeft}회` : `🔒 ${esc(G.Stages[G.DungeonLevels[0].unlock].name)} 클리어 시 개방`}</small></button>
           <button class="menu-btn" data-action="party">👥<b>파티 편성</b><small>리더·배치 변경</small></button>
           <button class="menu-btn" data-action="units">🎒<b>유닛</b><small>${state.units.length} / ${C().MAX_UNITS} · 합성·강화</small></button>
           <button class="menu-btn" data-action="summon">✨<b>소환</b><small>💎 ${C().SUMMON_COST}</small></button>
@@ -140,6 +144,35 @@
         ${topbar(state, `<h1>챕터 ${chapter.chapter} · ${chapter.name}</h1>`, 'lobby')}
         <div class="filters">${tabs}</div>
         <div class="card"><span class="muted">현재 파티 전투력 <b>${fmt(partyPower(state))}</b> · ★ 클리어 / ★★ 아군 사망 없음 / ★★★ ${C().STAR3_TIME}초 내 클리어</span></div>
+        <div class="stage-list">${cards}</div>
+      </div>`;
+    },
+
+    // ---- 7.3 일일 던전 ----
+    dungeons(state, view) {
+      const today = G.today();
+      const dungeon = G.Dungeons.find(d => d.id === view.dungeon) || G.Dungeons[0];
+      const tabs = G.Dungeons.map(d => `<button class="chip ${d === dungeon ? 'on' : ''}" data-action="dungeon" data-id="${d.id}">
+          ${d.icon} ${esc(d.name)} <small>${P().dailyRunsLeft(state, d.id, today)}/${C().DAILY_DUNGEON_RUNS}</small></button>`).join('');
+      const left = P().dailyRunsLeft(state, dungeon.id, today);
+      const cards = dungeon.stageIds.map(id => {
+        const s = G.Stages[id];
+        const locked = !P().isStageUnlocked(state, id);
+        const boss = G.Enemies[s.waves[s.waves.length - 1].monsters[0]];
+        const reward = s.rewards.gold ? `🪙 ${fmt(s.rewards.gold)}` : `EXP ${fmt(s.rewards.exp)}`;
+        return `<button class="stage-card" data-action="startStage" data-id="${id}" ${locked || !left ? 'disabled' : ''}>
+          <div class="stage-no">${locked ? '🔒' : dungeon.icon}</div>
+          <div class="stage-name">${esc(s.name)}</div>
+          <div class="stage-stars"></div>
+          <div class="stage-meta"><span>적 강도 ×${s.statMult.toFixed(2)}</span><span>보스 ${esc(boss.name)}</span></div>
+          <div class="stage-reward">${locked ? `<span>${esc(G.Stages[s.unlock].name)} 클리어 시 개방</span>` : `<span class="gem">${reward}</span>`}</div>
+        </button>`;
+      }).join('');
+      return `<div class="screen">
+        ${topbar(state, '<h1>일일 던전</h1>', 'lobby')}
+        <div class="filters">${tabs}</div>
+        <div class="card"><span class="muted">${esc(dungeon.desc)} 승리할 때만 횟수가 줄고, 매일 자정(기기 시간)에 ${C().DAILY_DUNGEON_RUNS}회로 초기화됩니다.
+          · 오늘 남은 보상 <b>${left}/${C().DAILY_DUNGEON_RUNS}</b> · 파티 전투력 <b>${fmt(partyPower(state))}</b></span></div>
         <div class="stage-list">${cards}</div>
       </div>`;
     },
@@ -419,6 +452,8 @@
         <p><b>성장</b> — 승리하면 출전한 유닛이 경험치를 얻습니다. 최대 레벨(등급×10)이 된 같은 등급 유닛 2명을
         <b>합성</b>하면 한 단계 위 등급 유닛을 얻습니다. 골드로 <b>강화</b>(+1~+5)할 수 있습니다.
         유닛 종류별로 처음 최대 레벨을 달성하면 보상을 받습니다.</p>
+        <p><b>일일 던전</b> — 1-3 클리어 후 열립니다. 황금 광산은 골드, 수련의 탑은 경험치를 많이 줍니다.
+        던전마다 하루 ${C().DAILY_DUNGEON_RUNS}번까지 보상을 받을 수 있고, 진 판은 횟수에 포함되지 않습니다.</p>
         <p><b>단축키</b> — 1~9 블록 · Space/Esc 일시정지 · A 자동 · S 배속</p>
         <p class="muted">진행 상황은 이 브라우저에 저장됩니다.</p>
         <div class="modal-actions"><button class="btn primary" data-action="closeModal">닫기</button></div>
@@ -433,7 +468,7 @@
         <div class="modal-actions" style="flex-direction:column">
           <button class="btn primary" data-action="resume">계속하기</button>
           <button class="btn" data-action="retry">처음부터 다시</button>
-          <button class="btn" data-action="quit">나가기 <small>보상 없이 스테이지 선택으로</small></button>
+          <button class="btn" data-action="quit">나가기 <small>보상 없이 선택 화면으로</small></button>
         </div>
       </div>`;
     },
@@ -446,14 +481,18 @@
         [`${C().STAR3_TIME}초 내 클리어`, result.victory && result.time <= C().STAR3_TIME]
       ].map(([label, ok]) => `<li class="${ok ? 'on' : ''}">${label}</li>`).join('');
 
+      const daily = G.Stages[result.stageId].mode === 'daily';
       let body = '';
       if (summary && result.victory) {
-        const rewards = [`🪙 +${fmt(summary.gold)}`, `EXP +${summary.exp}`];
+        const rewards = [];
+        if (summary.gold) rewards.push(`🪙 +${fmt(summary.gold)}`);
+        if (summary.exp) rewards.push(`EXP +${fmt(summary.exp)}`);
         if (summary.gems) rewards.push(`💎 +${summary.gems} 첫 클리어`);
         const items = [];
         for (const l of summary.levelUps) items.push(`<li>${esc(l.name)} <span class="up">Lv.${l.from} → Lv.${l.to}${l.max ? ' MAX' : ''}</span></li>`);
         for (const f of summary.firstMax) items.push(`<li>🏆 ${esc(f.name)} 첫 MAX 보상 🪙 +${fmt(f.gold)} 💎 +${f.gems}</li>`);
         if (summary.drop) items.push(`<li>🎁 획득: ${esc(P().charOf(summary.drop.unit).name)} ${stars(summary.drop.unit.grade)} ${summary.drop.isNew ? '<span class="badge new">NEW</span>' : ''}</li>`);
+        if (daily) items.push(`<li>오늘 남은 보상 ${summary.runsLeft}/${C().DAILY_DUNGEON_RUNS}회</li>`);
         body = `<div class="reward-row">${rewards.map(r => `<span>${r}</span>`).join('')}</div>
           ${items.length ? `<ul class="result-list">${items.join('')}</ul>` : ''}`;
       } else if (!result.victory) {
@@ -463,13 +502,13 @@
       const canNext = summary && result.victory && nextId;
       return `<div class="modal result ${result.victory ? 'win' : 'lose'}">
         <h2>${result.victory ? '승리!' : '패배…'}</h2>
-        <div class="result-stars">${[0, 1, 2].map(i => `<span class="${i < result.stars ? 'on' : ''}">★</span>`).join('')}</div>
-        <ul class="star-conds">${conds}</ul>
+        ${daily ? '' : `<div class="result-stars">${[0, 1, 2].map(i => `<span class="${i < result.stars ? 'on' : ''}">★</span>`).join('')}</div>
+        <ul class="star-conds">${conds}</ul>`}
         <p class="muted" style="text-align:center;margin:0 0 12px">시간 ${fmtTime(result.time)} · 아군 사망 ${result.deaths}</p>
         ${body}
         <div class="modal-actions">
-          <button class="btn" data-action="quit">${summary ? '스테이지 선택' : '로비'}</button>
-          <button class="btn" data-action="retry">다시 하기</button>
+          <button class="btn" data-action="quit">${!summary ? '로비' : daily ? '던전 선택' : '스테이지 선택'}</button>
+          <button class="btn" data-action="retry" ${daily && summary && !summary.runsLeft ? 'disabled' : ''}>다시 하기</button>
           ${canNext ? `<button class="btn primary" data-action="startStage" data-id="${nextId}">다음 스테이지 ›</button>` : ''}
           ${summary && !result.victory ? '<button class="btn primary" data-action="toParty">파티 편성</button>' : ''}
         </div>

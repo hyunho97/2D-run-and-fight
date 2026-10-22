@@ -18,6 +18,12 @@
     return Math.max(lo, Math.min(hi, v));
   };
 
+  // 일일 초기화 기준: 기기 로컬 날짜 YYYY-MM-DD
+  G.today = function (date) {
+    const d = date || new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  };
+
   // entries: [{ weight, ... }] → 가중치 비례로 하나 선택
   G.pickWeighted = function (entries, rng) {
     const total = entries.reduce((s, e) => s + e.weight, 0);

@@ -541,5 +541,41 @@ test('파티 엔트리로 전투 생성 (등급·레벨·강화 반영)', G => {
   assert(b.heroes[0].maxHp > 1500);
 });
 
+test('일일 던전: 해금 조건, 승리 시에만 횟수 차감, 날짜가 바뀌면 초기화', G => {
+  const s = P(G).newState();
+  const id = 'DGN_GOLD_1';
+  const win = v => ({ stageId: id, victory: v, stars: 1, time: 100 });
+  assert(P(G).dungeonError(s, id, '2026-01-01'));
+  s.stages[G.Stages[id].unlock] = { cleared: true, stars: 1, bestTime: 100 };
+  eq(P(G).dungeonError(s, id, '2026-01-01'), null);
+  const gold = s.gold;
+  P(G).applyBattleResult(s, win(false), () => 0.99, '2026-01-01');
+  eq(P(G).dailyRunsLeft(s, 'gold', '2026-01-01'), 3);
+  for (let i = 0; i < 3; i++) P(G).applyBattleResult(s, win(true), () => 0.99, '2026-01-01');
+  eq(s.gold - gold, G.Stages[id].rewards.gold * 3);
+  assert(P(G).dungeonError(s, id, '2026-01-01'));
+  eq(P(G).dailyRunsLeft(s, 'exp', '2026-01-01'), 3);
+  eq(P(G).dailyRunsLeft(s, 'gold', '2026-01-02'), 3);
+  eq(s.stages[id], undefined);
+  const fixed = P(G).sanitize(JSON.parse(JSON.stringify(s)));
+  eq(fixed.daily.runs.gold, 3);
+});
+
+test('일일 던전: 골드 던전은 EXP 없음, 경험치 던전은 골드 없음', G => {
+  for (const d of G.Dungeons) {
+    eq(d.stageIds.length, G.DungeonLevels.length);
+    for (const id of d.stageIds) {
+      const st = G.Stages[id];
+      assert(G.Stages[st.unlock] && !G.StageOrder.includes(id));
+      assert(d.reward === 'gold' ? st.rewards.gold > 0 && !st.rewards.exp : st.rewards.exp > 0 && !st.rewards.gold);
+      for (const w of st.waves) for (const m of w.monsters) assert(G.Enemies[m], m);
+    }
+  }
+  const s = P(G).newState();
+  const r = P(G).applyBattleResult(s, { stageId: 'DGN_GOLD_1', victory: true, stars: 1, time: 100 }, () => 0, '2026-01-01');
+  eq(r.levelUps.length, 0);
+  eq(r.drop, null);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

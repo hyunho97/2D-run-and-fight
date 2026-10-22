@@ -175,8 +175,17 @@
       leaderIndex: app.state.party.leaderIndex,
       seed: Date.now()
     };
-    if (!debugBattle && !P.isStageUnlocked(app.state, stageId)) return;
-    if (!debugBattle) app.view.chapter = G.Stages[stageId].chapter;
+    if (!debugBattle) {
+      const stage = G.Stages[stageId];
+      if (stage.mode === 'daily') {
+        const err = P.dungeonError(app.state, stageId, G.today());
+        if (err) { toast(err); return; }
+        app.view.dungeon = stage.dungeon;
+      } else {
+        if (!P.isStageUnlocked(app.state, stageId)) return;
+        app.view.chapter = stage.chapter;
+      }
+    }
     app.stageId = opts.stageId;
     app.battle = new G.BattleManager(Object.assign(opts, { auto: app.ui.auto }));
     const warp = debugBattle ? Number(params.get('warp')) || 0 : 0;
@@ -211,9 +220,9 @@
       tutorial.step = -1;
       app.state.tutorialDone = true;
     }
-    const summary = debugBattle ? null : P.applyBattleResult(app.state, result, app.rng);
+    const summary = debugBattle ? null : P.applyBattleResult(app.state, result, app.rng, G.today());
     if (summary) save();
-    const nextId = P.nextStageId(result.stageId);
+    const nextId = G.Stages[result.stageId].mode ? null : P.nextStageId(result.stageId);
     modal(S.battleResult(app.state, result, summary, nextId && P.isStageUnlocked(app.state, nextId) ? nextId : null));
   }
 
@@ -240,6 +249,8 @@
   const actions = {
     lobby: () => go('lobby'),
     stages: () => go('stages', { chapter: null }),
+    dungeons: () => go('dungeons'),
+    dungeon: d => { app.view.dungeon = d.id; render(); },
     party: () => go('party'),
     units: () => go('units'),
     unit: d => go('unit', { unitUid: Number(d.uid) }),
@@ -369,7 +380,7 @@
     startStage: d => { enterLandscape(); startBattle(d.id); },
     resume,
     retry: () => startBattle(app.stageId),
-    quit: () => leaveBattle(debugBattle ? 'lobby' : 'stages'),
+    quit: () => leaveBattle(debugBattle ? 'lobby' : G.Stages[app.stageId].mode === 'daily' ? 'dungeons' : 'stages'),
     toParty: () => leaveBattle('party')
   };
 

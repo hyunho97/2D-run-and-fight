@@ -40,7 +40,9 @@
   // 챕터 테마별 배경
   const THEMES = {
     forest: { sky: ['#6ec3e8', '#d4f1fb'], far: '#93c4a0', prop: 'tree', ground: '#7a5a3a', groundTop: '#6aa84f' },
-    desert: { sky: ['#f2a65a', '#fde8c0'], far: '#e0b878', prop: 'cactus', ground: '#c9965a', groundTop: '#e6c27f' }
+    desert: { sky: ['#f2a65a', '#fde8c0'], far: '#e0b878', prop: 'cactus', ground: '#c9965a', groundTop: '#e6c27f' },
+    mine: { sky: ['#1e1a2b', '#4a3d52'], far: '#3a3045', prop: 'crystal', ground: '#4a3b30', groundTop: '#6b5a48' },
+    tower: { sky: ['#3b4a8a', '#c9a0c8'], far: '#6a6390', prop: 'pillar', ground: '#7a7480', groundTop: '#9a94a2' }
   };
 
   const num = hex => parseInt(hex.slice(1), 16);
@@ -157,7 +159,35 @@
         for (let k = 0; k < 9; k++) {
           const x = 110 + k * 227 + hash(k) * 60;
           const s = 0.7 + hash(k + 99) * 0.6;
-          if (THEMES[theme].prop === 'cactus') {
+          const prop = THEMES[theme].prop;
+          if (prop === 'crystal') {
+            // 금광맥 수정 무리
+            const cols = ['#f2c94c', '#e0a82e', '#9b7be0'];
+            for (let j = 0; j < 3; j++) {
+              const cx = x + (j - 1) * 26 * s, h = (70 + hash(k * 3 + j) * 70) * s, w = 16 * s;
+              ctx.fillStyle = cols[(k + j) % 3];
+              ctx.beginPath();
+              ctx.moveTo(cx - w, base);
+              ctx.lineTo(cx - w * 0.8, base - h * 0.75);
+              ctx.lineTo(cx, base - h);
+              ctx.lineTo(cx + w * 0.8, base - h * 0.75);
+              ctx.lineTo(cx + w, base);
+              ctx.fill();
+              ctx.fillStyle = 'rgba(255,255,255,0.35)';
+              ctx.fillRect(cx - w * 0.5, base - h * 0.7, w * 0.3, h * 0.5);
+            }
+          } else if (prop === 'pillar') {
+            // 부서진 석주
+            if (k % 2) continue;
+            const h = (150 + hash(k + 7) * 80) * s, w = 34 * s;
+            ctx.fillStyle = '#b8b0c4';
+            ctx.fillRect(x - w / 2, base - h, w, h);
+            ctx.fillStyle = '#8e869c';
+            ctx.fillRect(x - w / 2 - 6 * s, base - h - 12 * s, w + 12 * s, 12 * s);
+            ctx.fillRect(x - w / 2 - 6 * s, base - 12 * s, w + 12 * s, 12 * s);
+            ctx.fillStyle = 'rgba(0,0,0,0.12)';
+            for (let j = 0; j < 3; j++) ctx.fillRect(x - w / 2 + (j + 0.5) * w / 3.5, base - h, 3 * s, h);
+          } else if (prop === 'cactus') {
             if (k % 2) continue;
             ctx.fillStyle = '#5f9a4a';
             const r = (cx, cy, w, h) => { ctx.beginPath(); ctx.roundRect(cx, cy, w, h, Math.min(w, h) / 2); ctx.fill(); };
