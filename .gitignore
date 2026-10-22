@@ -1,0 +1,6 @@
+# 기획서는 비공개 (로컬에만 보관)
+GAME_DESIGN_DOCUMENT.md
+
+node_modules/
+.claude/
+*.log

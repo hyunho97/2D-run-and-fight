@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>블록 체인 RPG — 프로토타입</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0b0e15; overflow: hidden; }
+  body { display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; user-select: none; -webkit-user-select: none; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<script src="src/core.js"></script>
+<script src="src/config.js"></script>
+<script src="src/data.js"></script>
+<script src="src/battle/StatusEffectSystem.js"></script>
+<script src="src/battle/DamageCalculator.js"></script>
+<script src="src/battle/Unit.js"></script>
+<script src="src/battle/ChainResolver.js"></script>
+<script src="src/battle/BlockManager.js"></script>
+<script src="src/battle/SkillExecutor.js"></script>
+<script src="src/battle/BattleManager.js"></script>
+<script src="src/ui/Renderer.js"></script>
+<script src="src/main.js"></script>
+</body>
+</html>

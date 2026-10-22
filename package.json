@@ -1,0 +1,10 @@
+{
+  "name": "block-chain-rpg-prototype",
+  "version": "0.1.0",
+  "private": true,
+  "description": "블록 체인 기반 2D 횡스크롤 RPG 프로토타입 (HTML5 Canvas)",
+  "scripts": {
+    "test": "node tests/run-tests.js",
+    "sim": "node tools/simulate.js"
+  }
+}
