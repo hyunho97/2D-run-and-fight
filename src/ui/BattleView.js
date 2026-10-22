@@ -332,20 +332,29 @@
       if (art.projectile && target) this.shoot(v, target, art.projectile);
     }
 
-    shoot(v, target, kind, onHit) {
+    // o: { scale, delay, dy, arc } — arc > 0 이면 포물선
+    shoot(v, target, kind, onHit, o) {
+      o = o || {};
       const tv = this.views.get(target.uid);
       const dir = v.isHero ? 1 : -1;
       const sx = v.unit.x + dir * v.w * 0.4;
-      const sy = GROUND_Y - v.h * 0.55;
+      const sy = GROUND_Y - v.h * 0.55 + (o.dy || 0);
       const tx = target.x;
-      const ty = GROUND_Y - (tv ? tv.h * 0.5 : 60);
-      const img = this.add.image(sx, sy, this.rowsTex('proj_' + kind, PA.projectileRows(kind), PA.palette({})))
-        .setScale(5).setDepth(520).setData('fx', true);
-      img.setRotation(Math.atan2(ty - sy, tx - sx));
+      const ty = o.arc ? GROUND_Y - 10 : GROUND_Y - (tv ? tv.h * 0.5 : 60) + (o.dy || 0) * 0.3;
+      const img = this.add.image(sx, sy, this.projTex(kind)).setScale(o.scale || 5).setDepth(520).setData('fx', true)
+        .setVisible(!o.delay);
+      img.setRotation(o.arc ? 0 : Math.atan2(ty - sy, tx - sx));
+      const p = { t: 0 };
       this.tweens.add({
-        targets: img, x: tx, y: ty, duration: 180,
+        targets: p, t: 1, duration: o.arc ? 320 : 180, delay: o.delay || 0,
+        onStart: () => img.setVisible(true),
+        onUpdate: () => img.setPosition(sx + (tx - sx) * p.t, sy + (ty - sy) * p.t - (o.arc ? Math.sin(p.t * Math.PI) * o.arc : 0)),
         onComplete: () => { img.destroy(); if (onHit) onHit(); }
       });
+    }
+
+    projTex(kind) {
+      return this.rowsTex('proj_' + kind, PA.projectileRows(kind), PA.palette({}));
     }
 
     // ---- 이벤트 → 연출 ----
@@ -410,27 +419,107 @@
       }
     }
 
+    // 직업(무기)별 스킬 연출. 체인이 길수록 규모가 커진다
     skillFx(e) {
       const cv = this.views.get(e.caster.uid);
       const color = e.caster.color;
       this.attackAnim(cv, null, e.chain === 3);
-      const proj = cv && cv.art.projectile;
+      const weapon = cv ? cv.art.weapon : null;
       for (const t of e.targets) {
-        const hit = () => {
-          if (e.skill.kind === 'heal') {
-            this.burst(t.x, this.midY(t), 60 + e.chain * 40, '#6EE77A', 6, 450);
-          } else {
-            this.burst(t.x, this.midY(t), 50 + e.chain * 55, color, 4 + e.chain * 4, 300 + e.chain * 100);
-            this.spark(t.x, this.midY(t), 6 * e.chain, color);
-          }
-        };
-        if (proj && e.skill.kind !== 'heal') this.shoot(cv, t, proj, hit);
-        else hit();
+        if (e.skill.kind === 'heal') this.fxHeal(t, e.chain);
+        else if (!cv) this.fxImpact(t, e.chain, color);
+        else if (weapon === 'bow') this.fxArrows(cv, t, e.chain, color);
+        else if (weapon === 'staff') this.fxOrb(cv, t, e.chain, color);
+        else if (weapon === 'dagger') this.fxTrap(cv, t, e.chain, color);
+        else this.fxSlash(t, e.chain, color);
       }
       if (e.chain === 3) {
         this.cameras.main.shake(300, 0.01);
         this.cutin(e.caster, e.skill.name);
       }
+    }
+
+    fxImpact(t, chain, color) {
+      this.burst(t.x, this.midY(t), 50 + chain * 55, color, 4 + chain * 4, 300 + chain * 100);
+      this.spark(t.x, this.midY(t), 6 * chain, color);
+    }
+
+    // 검: 초승달 베기 (체인 수만큼 연속)
+    fxSlash(t, chain, color) {
+      for (let i = 0; i < chain; i++) {
+        this.time.delayedCall(i * 90, () => {
+          const r = 70 + chain * 22;
+          const g = this.add.graphics().setDepth(530).setData('fx', true);
+          g.lineStyle(14 + chain * 4, num(color), 0.9);
+          g.beginPath();
+          g.arc(0, 0, r, -1.1, 1.1);
+          g.strokePath();
+          g.lineStyle(6, 0xffffff, 1);
+          g.beginPath();
+          g.arc(0, 0, r, -0.9, 0.9);
+          g.strokePath();
+          g.setPosition(t.x - r * 0.5, this.midY(t)).setAngle((i % 2 ? 1 : -1) * 35 + (Math.random() - 0.5) * 20).setScale(0.6);
+          this.tweens.add({ targets: g, scale: 1.2, alpha: 0, duration: 220, ease: 'Quad.easeOut', onComplete: () => g.destroy() });
+          this.spark(t.x, this.midY(t), 4 + chain * 2, '#ffffff');
+        });
+      }
+      if (chain === 3) this.time.delayedCall(200, () => this.burst(t.x, this.midY(t), 180, color, 10, 400));
+    }
+
+    // 활: 1·2체인은 일제 사격, 3체인은 화살비
+    fxArrows(cv, t, chain, color) {
+      if (chain < 3) {
+        const n = chain === 1 ? 1 : 3;
+        for (let i = 0; i < n; i++) {
+          this.shoot(cv, t, 'arrow', i === n - 1 ? () => this.fxImpact(t, chain, color) : null, { delay: i * 60, dy: (i - 1) * 14 });
+        }
+        return;
+      }
+      for (let i = 0; i < 10; i++) {
+        const x = t.x + (Math.random() - 0.5) * 220;
+        const a = this.add.image(x - 120, 120, this.projTex('arrow')).setScale(6).setDepth(520)
+          .setRotation(Math.atan2(GROUND_Y - 140, 120)).setVisible(false).setData('fx', true);
+        this.tweens.add({
+          targets: a, x, y: GROUND_Y - 20, duration: 220, delay: i * 45,
+          onStart: () => a.setVisible(true),
+          onComplete: () => { this.spark(x, GROUND_Y - 30, 4, color); a.destroy(); }
+        });
+      }
+      this.time.delayedCall(10 * 45 + 220, () => this.burst(t.x, this.midY(t), 200, color, 10, 400));
+    }
+
+    // 지팡이: 마법구 (체인에 따라 크기), 3체인은 대폭발
+    fxOrb(cv, t, chain, color) {
+      this.shoot(cv, t, 'orb', () => {
+        this.fxImpact(t, chain, color);
+        if (chain === 3) {
+          this.burst(t.x, this.midY(t), 260, '#ffffff', 6, 500);
+          this.spark(t.x, this.midY(t), 30, '#9b6bff');
+          this.cameras.main.flash(120, 160, 120, 255);
+        }
+      }, { scale: 4 + chain * 2 });
+    }
+
+    // 단검(사냥꾼): 덫을 던져 발밑에서 물어뜯기
+    fxTrap(cv, t, chain, color) {
+      for (let i = 0; i < chain; i++) {
+        const target = { uid: t.uid, x: t.x + (i - (chain - 1) / 2) * 50 };
+        this.shoot(cv, target, 'trap', () => {
+          const snap = this.add.image(target.x, GROUND_Y - 10, this.projTex('trap')).setScale(6, 9).setDepth(530).setData('fx', true);
+          this.tweens.add({ targets: snap, scaleY: 3, alpha: 0, duration: 260, ease: 'Back.easeIn', onComplete: () => snap.destroy() });
+          this.spark(target.x, GROUND_Y - 30, 8, color);
+          if (i === chain - 1) this.burst(t.x, this.midY(t), 60 + chain * 45, color, 6, 350);
+        }, { arc: 140, delay: i * 80, scale: 5 });
+      }
+    }
+
+    // 회복: 빛기둥 + 상승하는 빛
+    fxHeal(t, chain) {
+      const w = 60 + chain * 25;
+      const pillar = this.add.rectangle(t.x, GROUND_Y, w, 420, 0x6ee77a, 0.35).setOrigin(0.5, 1).setDepth(530).setData('fx', true);
+      this.tweens.add({ targets: pillar, scaleX: 0.2, alpha: 0, duration: 600, ease: 'Quad.easeIn', onComplete: () => pillar.destroy() });
+      this.burst(t.x, this.midY(t), 60 + chain * 40, '#6EE77A', 6, 450);
+      this.spark(t.x, GROUND_Y - 40, 8 + chain * 6, '#c8ffd0', -500);
     }
 
     floatText(unit, str, color, size, extraY) {

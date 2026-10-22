@@ -226,6 +226,35 @@ body.in-battle #game-wrap { visibility: visible; }
 .result-list li { background: var(--panel-2); padding: 8px 12px; border-radius: 10px; }
 .result-list .up { color: var(--good); font-weight: bold; }
 
+/* ---- 도감 ---- */
+.milestones { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-top: 14px; }
+.milestone { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px; border-radius: 12px; background: var(--panel-2); border: 1px solid var(--line); }
+.milestone span { color: var(--gem); font-weight: bold; }
+.milestone .btn { min-height: 36px; padding: 6px 16px; font-size: 14px; }
+.milestone em { color: var(--muted); font-style: normal; font-size: 14px; padding: 8px; }
+.milestone.ready { border-color: var(--gold); }
+.milestone.done { opacity: .5; }
+.col-row h4 { margin: 12px 0 6px; font-size: 14px; color: var(--muted); }
+.col-row:first-child h4 { margin-top: 0; }
+.col-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(48px, 1fr)); gap: 6px; }
+.col-cell {
+  --c: #2a3042; position: relative; aspect-ratio: 1; border-radius: 10px; display: grid; place-items: end center; overflow: hidden;
+  background: color-mix(in srgb, var(--c) 70%, black); border: 1px solid var(--line);
+}
+.col-cell img { width: 80%; image-rendering: pixelated; filter: brightness(0) opacity(.35); }
+.col-cell.owned img { filter: none; }
+.col-cell i { position: absolute; top: 1px; right: 2px; font-style: normal; font-size: 12px; }
+
+/* ---- 설정 ---- */
+.settings h3 { margin: 18px 0 8px; font-size: 16px; }
+.settings .sound-toggles { justify-content: flex-start; }
+.settings textarea {
+  width: 100%; min-height: 70px; margin-top: 10px; padding: 10px; border-radius: 10px; resize: vertical;
+  background: #0f1320; color: var(--text); border: 1px solid var(--line); font: 12px/1.4 monospace; word-break: break-all;
+}
+.file-btn { display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.file-btn input { display: none; }
+
 /* ---- 토스트 ---- */
 #toast {
   position: fixed; left: 50%; bottom: 28px; z-index: 30; transform: translate(-50%, 20px);

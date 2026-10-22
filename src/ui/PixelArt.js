@@ -286,7 +286,7 @@
     Archer: { head: 'hood', weapon: 'bow', idleAngle: 0, projectile: 'arrow' },
     Mage: { head: 'wizard', weapon: 'staff', idleAngle: -10, projectile: 'orb' },
     Cleric: { head: 'holy', weapon: 'holyStaff', idleAngle: -10 },
-    Hunter: { head: 'cap', weapon: 'dagger', idleAngle: -40, projectile: 'trap' }
+    Hunter: { head: 'cap', weapon: 'dagger', idleAngle: -40, projectile: 'arrow' }   // 스킬은 덫(fxTrap)
   };
 
   // 적 외형 (id → 템플릿/색). humanoid는 인간형 몸 + head/weapon

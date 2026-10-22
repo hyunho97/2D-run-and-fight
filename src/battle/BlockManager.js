@@ -10,6 +10,7 @@
       this.rng = rng;
       this.slots = [];
       this.spawnTimer = 0;
+      this.drought = {};   // owner → 연속으로 안 나온 횟수
     }
 
     get isFull() { return this.slots.length >= G.Config.BLOCK_SLOTS; }
@@ -23,11 +24,25 @@
 
     spawn() {
       if (this.isFull) return null;
-      const pick = G.pickWeighted(this.weights(), this.rng);
+      const entries = this.weights();
+      const pick = this.pityPick(entries) || G.pickWeighted(entries, this.rng);
       if (!pick) return null;
+      for (const e of entries) this.drought[e.owner] = e.owner === pick.owner ? 0 : (this.drought[e.owner] || 0) + 1;
       const block = { id: nextBlockId++, owner: pick.owner };
       this.slots.push(block);
       return block;
+    }
+
+    // 15장 리스크 대응: 가장 오래 안 나온 캐릭터가 한도에 도달하면 확정 생성
+    pityPick(entries) {
+      const limit = G.Config.BLOCK_PITY;
+      if (!limit) return null;
+      let worst = null;
+      for (const e of entries) {
+        const d = this.drought[e.owner] || 0;
+        if (d >= limit && (!worst || d > (this.drought[worst.owner] || 0))) worst = e;
+      }
+      return worst;
     }
 
     update(dt) {

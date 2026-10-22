@@ -57,6 +57,10 @@
       <button class="chip ${settings.bgm ? 'on' : ''}" data-action="toggleBgm">${settings.bgm ? '🎵' : '🔕'} 음악</button>`;
   }
 
+  function basicTotal() {
+    return Object.values(G.Characters).filter(c => c.type === 'Basic').length;
+  }
+
   function sortUnits(units) {
     return units.slice().sort((a, b) => b.grade - a.grade || b.level - a.level || b.enhance - a.enhance || a.uid - b.uid);
   }
@@ -100,13 +104,10 @@
           <button class="menu-btn" data-action="party">👥<b>파티 편성</b><small>리더·배치 변경</small></button>
           <button class="menu-btn" data-action="units">🎒<b>유닛</b><small>${state.units.length} / ${C().MAX_UNITS} · 합성·강화</small></button>
           <button class="menu-btn" data-action="summon">✨<b>소환</b><small>💎 ${C().SUMMON_COST}</small></button>
+          <button class="menu-btn" data-action="collection">📚<b>도감</b><small>${P().collectionCount(state)} / ${basicTotal()} · 달성 보상</small></button>
           <button class="menu-btn" data-action="help">📖<b>도움말</b><small>조작·성장 방법</small></button>
+          <button class="menu-btn" data-action="settings">⚙️<b>설정</b><small>사운드·데이터 백업</small></button>
         </nav>
-        <footer class="lobby-foot">
-          <span>도감 ${Object.keys(state.collection).length} / ${Object.keys(G.Characters).length}</span>
-          <span class="sound-toggles">${soundToggles(state.settings)}</span>
-          <button class="link" data-action="reset">데이터 초기화</button>
-        </footer>
       </div>`;
     },
 
@@ -259,7 +260,84 @@
       </div>`;
     },
 
+    // ---- 도감 (4.5.2) ----
+    collection(state, view) {
+      const grade = view.colGrade || 1;
+      const count = P().collectionCount(state);
+      const total = basicTotal();
+      const milestones = P().collectionMilestones(state).map(m => `
+        <div class="milestone ${m.claimed ? 'done' : m.reached ? 'ready' : ''}">
+          <b>${m.need}종</b><span>💎 ${fmt(m.gems)}</span>
+          ${m.claimed ? '<em>받음</em>'
+            : `<button class="btn ${m.reached ? 'primary' : ''}" data-action="claimCollection" data-need="${m.need}" ${m.reached ? '' : 'disabled'}>받기</button>`}
+        </div>`).join('');
+      const tabs = [1, 2, 3, 4, 5, 6].map(g => {
+        const own = Object.values(G.Characters).filter(c => c.type === 'Basic' && c.grade === g && state.collection[c.id]).length;
+        return `<button class="chip ${g === grade ? 'on' : ''}" data-action="colGrade" data-grade="${g}">★${g} <small>${own}/96</small></button>`;
+      }).join('');
+      const rows = G.ClassOrder.map(cls => {
+        const cells = Object.values(G.Characters)
+          .filter(c => c.type === 'Basic' && c.grade === grade && c.class === cls)
+          .map(c => {
+            const owned = !!state.collection[c.id];
+            const trophy = state.firstMaxRewarded[c.id] ? '<i title="첫 MAX 달성">🏆</i>' : '';
+            return `<div class="col-cell ${owned ? 'owned' : ''}" title="${owned ? esc(c.name) : '???'}" style="--c:${owned ? c.blockColor : '#2a3042'}">
+              <img src="${G.PixelArt.portraitUrl(c)}" alt="">${trophy}</div>`;
+          }).join('');
+        return `<div class="col-row"><h4>${G.Classes[cls].name}</h4><div class="col-grid">${cells}</div></div>`;
+      }).join('');
+      return `<div class="screen">
+        ${topbar(state, '<h1>도감</h1>', 'lobby')}
+        <section class="card">
+          <h2>수집 ${count} / ${total} <small>유닛을 처음 얻으면 등록 · 🏆 첫 MAX 레벨 달성</small></h2>
+          <div class="exp-bar"><i style="width:${Math.floor(count / total * 100)}%"></i></div>
+          <div class="milestones">${milestones}</div>
+        </section>
+        <div class="filters">${tabs}</div>
+        <section class="card">${rows}</section>
+      </div>`;
+    },
+
     // ---- 모달 ----
+    settings(state, backupCode) {
+      return `<div class="modal settings">
+        <h2>⚙️ 설정</h2>
+        <h3>사운드</h3>
+        <div class="sound-toggles">${soundToggles(state.settings)}</div>
+        <h3>데이터 백업</h3>
+        <p class="hint">진행 상황은 이 브라우저에만 저장됩니다. 다른 기기로 옮기거나 브라우저 데이터를 지우기 전에 백업하세요.</p>
+        <div class="modal-actions">
+          <button class="btn" data-action="exportSave">📋 백업 코드 복사</button>
+          <button class="btn" data-action="downloadSave">💾 파일로 저장</button>
+        </div>
+        <textarea id="backup-code" placeholder="백업 코드를 여기에 붙여넣고 [코드로 불러오기]를 누르세요" spellcheck="false">${backupCode ? esc(backupCode) : ''}</textarea>
+        <div class="modal-actions">
+          <button class="btn" data-action="importSave">코드로 불러오기</button>
+          <label class="btn file-btn">파일 불러오기<input type="file" id="import-file" accept=".json,.txt,application/json,text/plain"></label>
+        </div>
+        <h3>초기화</h3>
+        <div class="modal-actions">
+          <button class="btn danger" data-action="reset">데이터 초기화</button>
+        </div>
+        <div class="modal-actions"><button class="btn primary" data-action="closeModal">닫기</button></div>
+      </div>`;
+    },
+
+    importConfirm(state) {
+      const cleared = G.StageOrder.filter(id => state.stages[id] && state.stages[id].cleared).length;
+      return `<div class="modal warn">
+        <h2>백업 불러오기</h2>
+        <p>현재 진행 상황을 아래 백업으로 <b>덮어씁니다</b>. 되돌릴 수 없습니다.</p>
+        <ul>
+          <li>유닛 ${state.units.length}명 · 스테이지 ${cleared}/${G.StageOrder.length} 클리어</li>
+          <li>🪙 ${fmt(state.gold)} · 💎 ${fmt(state.gems)}</li>
+        </ul>
+        <div class="modal-actions">
+          <button class="btn" data-action="closeModal">취소</button>
+          <button class="btn danger" data-action="importDo">불러오기</button>
+        </div>
+      </div>`;
+    },
     synthPicker(state, uid) {
       const list = sortUnits(P().synthesisCandidates(state, uid))
         .map(u => unitTile(state, u, { action: 'synthChoose', extra: `data-a="${uid}"` })).join('');

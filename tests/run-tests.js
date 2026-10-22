@@ -18,11 +18,12 @@ const LOGIC_FILES = [
   'src/battle/SkillExecutor.js',
   'src/battle/BattleManager.js',
   'src/meta/Progression.js',
+  'src/meta/SaveManager.js',
   'src/ui/PixelArt.js'
 ];
 
 function loadGame() {
-  const ctx = { console };
+  const ctx = { console, btoa, atob, TextEncoder, TextDecoder };
   ctx.window = ctx;
   vm.createContext(ctx);
   for (const f of LOGIC_FILES) {
@@ -92,7 +93,27 @@ test('블록 바는 최대 9칸', G => {
   eq(b.blocks.slots.length, 9);
 });
 
-test('리더 블록 생성 확률 50% / 멤버 25%', G => {
+test('연속 미생성 방지: 한도만큼 안 나온 캐릭터는 확정 생성', G => {
+  const b = newBattle(G);
+  b.blocks.rng = () => 0;   // 가중치 랜덤은 항상 첫 캐릭터(리더)
+  const seen = [];
+  for (let i = 0; i < 30; i++) {
+    b.blocks.slots = [];
+    seen.push(b.blocks.spawn().owner);
+  }
+  // 여러 명이 동시에 한도에 걸리면 한 명씩 나오므로 보장 = 한도 + (파티원 수 - 1)
+  const limit = G.Config.BLOCK_PITY + b.heroes.length - 1;
+  for (const h of b.heroes) {
+    let gap = 0;
+    for (const o of seen) {
+      gap = o === h.uid ? 0 : gap + 1;
+      assert(gap <= limit, `hero ${h.slot} drought ${gap} > ${limit}`);
+    }
+  }
+});
+
+test('리더 블록 생성 확률 50% / 멤버 25% (보정 끔)', G => {
+  G.Config.BLOCK_PITY = 0;
   const b = newBattle(G, { leaderIndex: 1 });
   const counts = {};
   const N = 40000;
@@ -458,6 +479,32 @@ test('방출: 파티 제외, 등급별 골드 지급', G => {
   const u = s.units.find(x => !s.party.members.includes(x.uid));
   const gold = P(G).release(s, u.uid);
   eq([gold, s.gold, s.units.length], [G.Config.RELEASE_GOLD[0], G.Config.RELEASE_GOLD[0], 5]);
+});
+
+test('도감 보상: 달성 종류 수 도달 시 1회 수령', G => {
+  const s = P(G).newState();
+  const [need, gems] = G.Config.COLLECTION_MILESTONES[0];
+  assert(P(G).collectionMilestones(s).every(m => !m.reached), 'starter 6 < first milestone');
+  Object.values(G.Characters).filter(c => c.type === 'Basic').slice(0, need).forEach(c => { s.collection[c.id] = true; });
+  const before = s.gems;
+  eq(P(G).claimCollection(s, need), gems);
+  eq(s.gems, before + gems);
+  let threw = false;
+  try { P(G).claimCollection(s, need); } catch (e) { threw = true; }
+  assert(threw, 'no double claim');
+  eq(P(G).sanitize(JSON.parse(JSON.stringify(s))).collectionClaimed, [need]);
+});
+
+test('백업 코드/JSON 내보내기·가져오기 왕복, 잘못된 코드는 거부', G => {
+  const s = P(G).newState();
+  s.gold = 12345;
+  s.stages.STG_01_01 = { cleared: true, stars: 3, bestTime: 40 };
+  const fromCode = G.SaveManager.importText(G.SaveManager.exportCode(s));
+  eq([fromCode.gold, fromCode.units.length, fromCode.stages.STG_01_01.stars], [12345, 6, 3]);
+  const fromJson = G.SaveManager.importText(G.SaveManager.exportJson(s));
+  eq(fromJson.gold, 12345);
+  eq(G.SaveManager.importText('BCRPG1:@@@'), null);
+  eq(G.SaveManager.importText('hello'), null);
 });
 
 test('파티 배치: 같은 유닛을 다른 칸에 두면 자리 교체', G => {

@@ -31,6 +31,8 @@
   };
   app.ui.speed = app.state.settings.speed;
   app.ui.auto = app.state.settings.auto;
+  if (debugBattle && params.has('auto')) app.ui.auto = params.get('auto') === '1';
+  if (debugBattle && params.has('speed')) app.ui.speed = params.get('speed') === '2' ? 2 : 1;
   G.Sound.setEnabled(app.state.settings.sfx, app.state.settings.bgm);
 
   function save() {
@@ -67,7 +69,29 @@
     G.Sound.setEnabled(app.state.settings.sfx, app.state.settings.bgm);
     save();
     if (app.battle) modal(S.pause(app.battle.stage.name, app.state.settings));
-    else render();
+    else modal(S.settings(app.state));
+  }
+
+  // ---- 백업 ----
+  function prepareImport(text) {
+    const imported = G.SaveManager.importText(text);
+    if (!imported) {
+      toast('올바른 백업 데이터가 아닙니다.', 'bad');
+      return;
+    }
+    app.pendingImport = imported;
+    modal(S.importConfirm(imported));
+  }
+
+  function downloadText(filename, text) {
+    const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   let toastTimer = 0;
@@ -219,6 +243,48 @@
     party: () => go('party'),
     units: () => go('units'),
     unit: d => go('unit', { unitUid: Number(d.uid) }),
+    collection: () => go('collection'),
+    colGrade: d => { app.view.colGrade = Number(d.grade); render(); },
+    claimCollection: d => {
+      const gems = P.claimCollection(app.state, Number(d.need));
+      save();
+      render();
+      toast(`도감 보상 💎 +${gems}`, 'good');
+    },
+    settings: () => modal(S.settings(app.state)),
+    exportSave: () => {
+      const code = G.SaveManager.exportCode(app.state);
+      const fallback = () => {
+        modal(S.settings(app.state, code));
+        const ta = document.getElementById('backup-code');
+        ta.focus();
+        ta.select();
+        toast('아래 코드를 길게 눌러 직접 복사하세요.');
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(code).then(() => toast('백업 코드를 복사했습니다. 메모장 등에 보관하세요.', 'good'), fallback);
+      } else {
+        fallback();
+      }
+    },
+    downloadSave: () => {
+      const d = new Date();
+      const stamp = d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0');
+      downloadText(`block-chain-rpg-save-${stamp}.json`, G.SaveManager.exportJson(app.state));
+      toast('백업 파일을 저장했습니다.', 'good');
+    },
+    importSave: () => prepareImport(document.getElementById('backup-code').value),
+    importDo: () => {
+      if (!app.pendingImport) return;
+      app.state = app.pendingImport;
+      app.pendingImport = null;
+      app.ui.speed = app.state.settings.speed;
+      app.ui.auto = app.state.settings.auto;
+      G.Sound.setEnabled(app.state.settings.sfx, app.state.settings.bgm);
+      save();
+      go('lobby');
+      toast('백업을 불러왔습니다.', 'good');
+    },
     help: () => modal(S.help()),
     closeModal: () => modal(''),
     backdrop: (d, e, el) => { if (e.target === el && !app.battle) modal(''); },
@@ -321,6 +387,10 @@
   }
   uiRoot.addEventListener('click', dispatch);
   modalRoot.addEventListener('click', dispatch);
+  modalRoot.addEventListener('change', e => {
+    if (e.target.id !== 'import-file' || !e.target.files[0]) return;
+    e.target.files[0].text().then(prepareImport, () => toast('파일을 읽을 수 없습니다.', 'bad'));
+  });
 
   // ---- 전투 입력 ----
   function toLogical(e) {
@@ -420,6 +490,7 @@
   }
 
   const view = new G.BattleView(gameWrap, { tick });
+  if (debugBattle) G.debug = { app, playerTap };   // 디버그 URL 전용: 자동 화면 검증용 핸들
   if (debugBattle) startBattle();
   else render();
 })(window.Game = window.Game || {});

@@ -22,6 +22,7 @@
         stages: {}, firstMaxRewarded: {}, collection: {},
         settings: { speed: 1, auto: false, sfx: true, bgm: true },
         tutorialDone: false,
+        collectionClaimed: [],
         stats: { battles: 0, summons: 0, synths: 0 }
       };
     },
@@ -94,6 +95,8 @@
       if (!(state.stages[first] && state.stages[first].cleared)) {
         return { text: '⚔️ 모험에서 1-1을 시작해 보세요. 블록을 눌러 스킬을 쓰는 게임입니다!', action: 'stages' };
       }
+      const milestone = P.collectionMilestones(state).find(m => m.reached && !m.claimed);
+      if (milestone) return { text: `📚 도감 ${milestone.need}종 달성! 보상 💎 ${milestone.gems}을 받으세요.`, action: 'collection' };
       const synth = state.units.find(u => !P.synthesisSelfError(state, u) && P.synthesisCandidates(state, u.uid).length);
       if (synth) return { text: `🔮 합성할 수 있는 ★${synth.grade} 유닛이 있어요. 합성하면 ★${synth.grade + 1}을 얻습니다.`, action: 'unit', uid: synth.uid };
       if (!P.summonError(state)) return { text: '✨ 보석이 충분해요. 소환으로 동료를 늘리면 합성 재료가 됩니다.', action: 'summon' };
@@ -297,6 +300,28 @@
       return { unit: P.createUnit(state, charId), isNew };
     },
 
+    // ---- 4.5.2 도감 ----
+    collectionCount(state) {
+      return Object.keys(state.collection).filter(id => G.Characters[id] && G.Characters[id].type === 'Basic').length;
+    },
+
+    collectionMilestones(state) {
+      const count = P.collectionCount(state);
+      return C().COLLECTION_MILESTONES.map(([need, gems]) => ({
+        need, gems, reached: count >= need, claimed: state.collectionClaimed.includes(need)
+      }));
+    },
+
+    claimCollection(state, need) {
+      const m = P.collectionMilestones(state).find(x => x.need === need);
+      if (!m) throw new Error('알 수 없는 보상입니다.');
+      if (m.claimed) throw new Error('이미 받은 보상입니다.');
+      if (!m.reached) throw new Error(`도감 ${need}종을 모아야 받을 수 있습니다.`);
+      state.collectionClaimed.push(need);
+      state.gems += m.gems;
+      return m.gems;
+    },
+
     // ---- 방출 (보관함 정리) ----
     releaseGold(unit) { return C().RELEASE_GOLD[unit.grade - 1]; },
 
@@ -360,6 +385,8 @@
         state.settings.sfx = raw.settings.sfx !== false;
         state.settings.bgm = raw.settings.bgm !== false;
       }
+      const milestones = C().COLLECTION_MILESTONES.map(m => m[0]);
+      state.collectionClaimed = (raw.collectionClaimed || []).filter((n, i, arr) => milestones.includes(n) && arr.indexOf(n) === i);
       state.tutorialDone = !!raw.tutorialDone || !!(state.stages.STG_01_01 && state.stages.STG_01_01.cleared);
       Object.assign(state.stats, raw.stats);
       return state;

@@ -7,6 +7,7 @@
     BLOCK_SLOTS: 9,
     BLOCK_SPAWN_INTERVAL: 1.2,     // TBD
     LEADER_WEIGHT_MULT: 2,         // 3.1.1 리더 가중치 2배
+    BLOCK_PITY: 6,                 // TBD 15장 연속 미생성 방지: N번 연속 안 나온 캐릭터는 다음에 확정 (0 = 끔)
     MAX_CHAIN: 3,
 
     // 2.3.1 광폭화
@@ -47,6 +48,8 @@
     SUMMON_GRADE_RATES: [[1, 0.8], [2, 0.2]],  // [등급, 확률]
     MAX_UNITS: 200,                // 보관함 최대 칸
     RELEASE_GOLD: [30, 100, 300, 1000, 3000, 10000],  // TBD 방출 시 등급별 골드
+    // 4.5.2 도감 연동 누적 보상 (TBD): [달성 종류 수, 보석]
+    COLLECTION_MILESTONES: [[10, 50], [25, 100], [50, 150], [100, 300], [200, 500], [400, 1000], [576, 3000]],
 
     // 7.4 평가
     STAR3_TIME: 90,                // TBD (★★★ 클리어 시간)
