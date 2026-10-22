@@ -250,6 +250,44 @@
     });
   }
 
+  // ---- 7.3 무한의 탑: 층은 요청 시 생성 (층 번호로 구성 고정) ----
+  G.Tower = {
+    unlock: 'STG_01_05',
+    tiers: [
+      { until: 15, theme: 'forest', monsters: ['MON_0001', 'MON_0002', 'MON_0003', 'MON_0004', 'MON_0005'], bosses: ['BOSS_0002', 'BOSS_0003', 'BOSS_0001'] },
+      { until: 30, theme: 'desert', monsters: ['MON_0006', 'MON_0007', 'MON_0008', 'MON_0009'], bosses: ['BOSS_0004', 'BOSS_0005', 'BOSS_0006'] },
+      { until: Infinity, theme: 'snow', monsters: ['MON_0010', 'MON_0011', 'MON_0012', 'MON_0013'], bosses: ['BOSS_0007', 'BOSS_0008', 'BOSS_0009'] }
+    ],
+    stageId(floor) { return 'TWR_' + String(floor).padStart(4, '0'); },
+
+    // 층 데이터를 G.Stages에 등록하고 id 반환
+    stage(floor) {
+      const id = G.Tower.stageId(floor);
+      if (G.Stages[id]) return id;
+      const C = G.Config;
+      const tier = G.Tower.tiers.find(t => floor <= t.until);
+      const rng = G.createRng(floor * 7919);
+      const pick = () => tier.monsters[Math.floor(rng() * tier.monsters.length)];
+      const size = floor > 20 || rng() < 0.4 ? 3 : 2;
+      const waves = [[pick(), pick()], Array.from({ length: size }, pick)].map(monsters => ({ monsters }));
+      const isBoss = floor % C.TOWER_BOSS_EVERY === 0;
+      if (isBoss) waves.push({ monsters: [tier.bosses[(floor / C.TOWER_BOSS_EVERY - 1) % tier.bosses.length]], isBoss: true });
+      G.Stages[id] = {
+        id, mode: 'tower', floor, theme: tier.theme, isBossFloor: isBoss,
+        name: '무한의 탑 ' + floor + '층',
+        statMult: Math.round((C.TOWER_MULT_BASE + C.TOWER_MULT_STEP * floor) * 100) / 100,
+        waves,
+        rewards: {
+          gold: C.TOWER_GOLD_PER_FLOOR * floor,
+          exp: C.TOWER_EXP_PER_FLOOR * floor,
+          firstClearGems: isBoss ? C.TOWER_BOSS_GEMS : C.TOWER_GEMS
+        },
+        drops: []
+      };
+      return id;
+    }
+  };
+
   G.DefaultParty = { members: ['BAS_0001', 'BAS_0003', 'BAS_0004'], leaderIndex: 0 };
   // 신규 플레이어 지급 유닛: 직업별 ★1 기본색 1명씩
   G.StarterUnits = ['BAS_0001', 'BAS_0002', 'BAS_0003', 'BAS_0004', 'BAS_0005', 'BAS_0006'];

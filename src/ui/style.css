@@ -167,6 +167,10 @@ body.in-battle #game-wrap { visibility: visible; }
 /* ---- 필터 ---- */
 .filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
 .filters .right { margin-left: auto; }
+.stage-list + .card { margin-top: 14px; }
+.tower-best { margin-top: 10px; font-size: 15px; }
+.tower-card .stage-no { font-size: 30px; }
+.badge.boss { background: #b23b3b; }
 .bulk-bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
 .card.bulk-bar { margin-top: 0; position: sticky; top: 0; z-index: 2; }
 .card.bulk-bar > span { font-weight: bold; margin-right: auto; }

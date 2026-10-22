@@ -55,6 +55,16 @@
     DAILY_DUNGEON_RUNS: 3,         // 던전별 하루 보상 횟수 (승리 시에만 차감)
     DUNGEON_REWARD_MULT: 3,        // 해금 기준 스테이지 보상 대비 배수
 
+    // 7.3 무한의 탑 (TBD)
+    TOWER_MAX_FLOOR: 100,
+    TOWER_BOSS_EVERY: 5,           // N층마다 보스 층
+    TOWER_MULT_BASE: 0.8,          // 적 배율 = BASE + STEP × 층
+    TOWER_MULT_STEP: 0.1,
+    TOWER_GOLD_PER_FLOOR: 60,      // 첫 돌파 보상 = 층 × 값
+    TOWER_EXP_PER_FLOOR: 40,
+    TOWER_GEMS: 10,
+    TOWER_BOSS_GEMS: 50,
+
     // 7.4 평가
     STAR3_TIME: 90,                // TBD (★★★ 클리어 시간)
 

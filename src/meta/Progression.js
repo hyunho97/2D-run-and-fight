@@ -23,7 +23,8 @@
         settings: { speed: 1, auto: false, sfx: true, bgm: true },
         tutorialDone: false,
         collectionClaimed: [],
-        daily: { date: '', runs: {} },   // 7.3 일일 던전: 로컬 날짜(YYYY-MM-DD)별 보상 횟수
+        daily: { date: '', runs: {} },
+        tower: { best: 0 },              // 7.3 무한의 탑 최고 돌파 층   // 7.3 일일 던전: 로컬 날짜(YYYY-MM-DD)별 보상 횟수
         stats: { battles: 0, summons: 0, synths: 0 }
       };
     },
@@ -80,6 +81,7 @@
     isStageUnlocked(state, stageId) {
       const stage = G.Stages[stageId];
       if (stage && stage.mode === 'daily') return P.isCleared(state, stage.unlock);
+      if (stage && stage.mode === 'tower') return P.isTowerOpen(state) && stage.floor <= state.tower.best + 1;
       const i = G.StageOrder.indexOf(stageId);
       if (i < 0) return false;
       if (i === 0) return true;
@@ -104,6 +106,12 @@
       if (!P.dailyRunsLeft(state, stage.dungeon, today)) return '오늘 보상 횟수를 모두 사용했습니다. 내일 다시 도전하세요.';
       return null;
     },
+
+    // ---- 7.3 무한의 탑 ----
+    isTowerOpen(state) { return P.isCleared(state, G.Tower.unlock); },
+
+    // 다음 도전 층 (최고층 달성 후에는 최고층 반복)
+    towerNextFloor(state) { return Math.min(state.tower.best + 1, C().TOWER_MAX_FLOOR); },
 
     nextStageId(stageId) {
       const i = G.StageOrder.indexOf(stageId);
@@ -176,6 +184,9 @@
         if (state.daily.date !== today) state.daily = { date: today, runs: {} };
         state.daily.runs[stage.dungeon] = (state.daily.runs[stage.dungeon] || 0) + 1;
         summary.runsLeft = P.dailyRunsLeft(state, stage.dungeon, today);
+      } else if (stage.mode === 'tower') {
+        summary.firstClear = stage.floor > state.tower.best;
+        if (summary.firstClear) state.tower.best = stage.floor;
       } else {
         const rec = state.stages[stage.id] || (state.stages[stage.id] = { cleared: false, stars: 0, bestTime: null });
         summary.firstClear = !rec.cleared;
@@ -184,7 +195,9 @@
         rec.bestTime = rec.bestTime == null ? result.time : Math.min(rec.bestTime, result.time);
       }
 
-      summary.gold = stage.rewards.gold;
+      // 탑은 첫 돌파 때만 보상
+      const paid = stage.mode !== 'tower' || summary.firstClear;
+      summary.gold = paid ? stage.rewards.gold : 0;
       state.gold += summary.gold;
       if (summary.firstClear) {
         summary.gems = stage.rewards.firstClearGems || 0;
@@ -192,7 +205,7 @@
       }
 
       // 경험치 획득: 전투 참여 (4.4.1)
-      summary.exp = stage.rewards.exp;
+      summary.exp = paid ? stage.rewards.exp : 0;
       for (const unit of summary.exp ? P.partyUnits(state) : []) {
         const r = P.addExp(state, unit, summary.exp);
         const name = P.charOf(unit).name;
@@ -457,6 +470,7 @@
           if (n) state.daily.runs[d.id] = num(n, 0, C().DAILY_DUNGEON_RUNS, 0);
         }
       }
+      if (raw.tower) state.tower.best = num(raw.tower.best, 0, C().TOWER_MAX_FLOOR, 0);
       state.tutorialDone = !!raw.tutorialDone || !!(state.stages.STG_01_01 && state.stages.STG_01_01.cleared);
       Object.assign(state.stats, raw.stats);
       return state;

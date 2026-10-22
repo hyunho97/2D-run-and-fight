@@ -609,5 +609,40 @@ test('일괄 방출: Lv.1 미강화 비파티 기본 유닛 선택, 파티 포�
   assert(threw && P(G).findUnit(s, raised.uid), '파티 포함 시 아무것도 방출하지 않음');
 });
 
+test('무한의 탑: 층 구성 고정, 5층마다 보스, 층이 오를수록 강해짐', G => {
+  const id = G.Tower.stage(7);
+  eq(G.Tower.stage(7), id);
+  const a = JSON.stringify(G.Stages[id].waves);
+  delete G.Stages[id];
+  eq(JSON.stringify(G.Stages[G.Tower.stage(7)].waves), a);
+  for (let f = 1; f <= G.Config.TOWER_MAX_FLOOR; f++) {
+    const s = G.Stages[G.Tower.stage(f)];
+    eq(s.isBossFloor, f % 5 === 0);
+    eq(s.waves.some(w => w.isBoss), s.isBossFloor);
+    for (const w of s.waves) for (const m of w.monsters) assert(G.Enemies[m], m);
+    if (f > 1) assert(s.statMult > G.Stages[G.Tower.stage(f - 1)].statMult);
+  }
+});
+
+test('무한의 탑: 해금, 다음 층만 도전, 첫 돌파만 보상', G => {
+  const s = P(G).newState();
+  const f1 = G.Tower.stage(1), f2 = G.Tower.stage(2);
+  assert(!P(G).isStageUnlocked(s, f1));
+  s.stages[G.Tower.unlock] = { cleared: true, stars: 1, bestTime: 100 };
+  assert(P(G).isStageUnlocked(s, f1) && !P(G).isStageUnlocked(s, f2));
+  const win = id => P(G).applyBattleResult(s, { stageId: id, victory: true, stars: 1, time: 60 }, () => 0.99, '2026-01-01');
+  const first = win(f1);
+  assert(first.firstClear && first.gold > 0 && first.gems === G.Config.TOWER_GEMS);
+  eq(s.tower.best, 1);
+  assert(P(G).isStageUnlocked(s, f2));
+  eq(P(G).towerNextFloor(s), 2);
+  const again = win(f1);
+  eq([again.gold, again.gems, again.exp], [0, 0, 0]);
+  P(G).applyBattleResult(s, { stageId: f2, victory: false, stars: 0, time: 60 }, () => 0.99, '2026-01-01');
+  eq(s.tower.best, 1);
+  eq(s.stages[f1], undefined);
+  eq(P(G).sanitize(JSON.parse(JSON.stringify(s))).tower.best, 1);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

@@ -1,6 +1,6 @@
 // 자동 모드 밸런스 시뮬레이션
 // node tools/simulate.js [runs] [partyIds,comma] [leaderIndex] [stage=STG_01_01] [level=1] [grade=1] [CONFIG_KEY=value ...]
-// stage=all 이면 챕터 전체를 요약 출력
+// stage=all 이면 챕터 전체를 요약 출력, stage=TWR_0012 이면 무한의 탑 12층
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -57,4 +57,5 @@ function simulate(stageId, verbose) {
 
 console.log(`party=${ids.join(',')} leader=${leaderIndex} grade=${opts.grade || 'data'} level=${opts.level} runs=${runs}`);
 if (opts.stage === 'all') G.StageOrder.forEach(id => simulate(id, false));
+else if (/^TWR_\d+$/.test(opts.stage)) simulate(G.Tower.stage(Number(opts.stage.slice(4))), true);
 else simulate(opts.stage, true);

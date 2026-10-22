@@ -103,6 +103,8 @@
         <nav class="menu-grid">
           <button class="menu-btn primary" data-action="stages">⚔️<b>모험</b>
             <small>${cleared}/${G.StageOrder.length} 클리어${next ? ` · 다음: ${esc(G.Stages[next].name)}` : ' · 전부 클리어!'}</small></button>
+          <button class="menu-btn" data-action="tower">🗼<b>무한의 탑</b>
+            <small>${P().isTowerOpen(state) ? `최고 ${state.tower.best}층 / ${C().TOWER_MAX_FLOOR}층` : `🔒 ${esc(G.Stages[G.Tower.unlock].name)} 클리어 시 개방`}</small></button>
           <button class="menu-btn" data-action="dungeons">🏰<b>일일 던전</b>
             <small>${dungeonsOpen ? `오늘 남은 보상 ${runsLeft}회` : `🔒 ${esc(G.Stages[G.DungeonLevels[0].unlock].name)} 클리어 시 개방`}</small></button>
           <button class="menu-btn" data-action="party">👥<b>파티 편성</b><small>리더·배치 변경</small></button>
@@ -174,6 +176,44 @@
         <div class="card"><span class="muted">${esc(dungeon.desc)} 승리할 때만 횟수가 줄고, 매일 자정(기기 시간)에 ${C().DAILY_DUNGEON_RUNS}회로 초기화됩니다.
           · 오늘 남은 보상 <b>${left}/${C().DAILY_DUNGEON_RUNS}</b> · 파티 전투력 <b>${fmt(partyPower(state))}</b></span></div>
         <div class="stage-list">${cards}</div>
+      </div>`;
+    },
+
+    // ---- 7.3 무한의 탑 ----
+    tower(state) {
+      const best = state.tower.best;
+      const open = P().isTowerOpen(state);
+      const floor = P().towerNextFloor(state);
+      const s = G.Stages[G.Tower.stage(floor)];
+      const done = best >= C().TOWER_MAX_FLOOR;
+      const names = ids => [...new Set(ids)].map(id => esc(G.Enemies[id].name)).join(', ');
+      const enemies = s.waves.filter(w => !w.isBoss).flatMap(w => w.monsters);
+      const boss = s.isBossFloor ? G.Enemies[s.waves[s.waves.length - 1].monsters[0]] : null;
+      // 다가오는 보스 층 3개 미리보기
+      const upcoming = [];
+      for (let f = floor + 1; upcoming.length < 3 && f <= C().TOWER_MAX_FLOOR; f++) {
+        if (f % C().TOWER_BOSS_EVERY === 0) upcoming.push(G.Stages[G.Tower.stage(f)]);
+      }
+      const next = open ? `<button class="stage-card next tower-card" data-action="startStage" data-id="${s.id}">
+          <div class="stage-no">${floor}F</div>
+          <div class="stage-name">${esc(s.name)}${boss ? ' <span class="badge boss">BOSS</span>' : ''}</div>
+          <div class="stage-stars"></div>
+          <div class="stage-meta"><span>적 강도 ×${s.statMult.toFixed(2)}</span><span>${names(enemies)}</span>${boss ? `<span>보스 ${esc(boss.name)}</span>` : ''}</div>
+          <div class="stage-reward">${done ? '<span>모든 층 돌파! 보상 없이 반복 도전</span>'
+            : `<span>첫 돌파</span><span>🪙 ${fmt(s.rewards.gold)}</span><span>EXP ${fmt(s.rewards.exp)}</span><span class="gem">💎${s.rewards.firstClearGems}</span>`}</div>
+        </button>`
+        : `<div class="card">🔒 ${esc(G.Stages[G.Tower.unlock].name)}을(를) 클리어하면 열립니다.</div>`;
+      const ahead = upcoming.map(u => {
+        const b = G.Enemies[u.waves[u.waves.length - 1].monsters[0]];
+        return `<li><b>${u.floor}층</b> 보스 ${esc(b.name)} · 적 강도 ×${u.statMult.toFixed(2)} · 💎${u.rewards.firstClearGems}</li>`;
+      }).join('');
+      return `<div class="screen">
+        ${topbar(state, '<h1>무한의 탑</h1>', 'lobby')}
+        <div class="card"><span class="muted">한 층씩 올라가는 도전 모드입니다. 층마다 적이 강해지고 ${C().TOWER_BOSS_EVERY}층마다 보스가 나옵니다.
+          보상은 처음 돌파할 때만 받고, 실패해도 잃는 것은 없습니다.</span>
+          <div class="tower-best">최고 기록 <b>${best}층</b> / ${C().TOWER_MAX_FLOOR}층 · 파티 전투력 <b>${fmt(partyPower(state))}</b></div></div>
+        <div class="stage-list">${next}</div>
+        ${open && ahead ? `<section class="card"><h3>다가오는 보스 층</h3><ul class="result-list">${ahead}</ul></section>` : ''}
       </div>`;
     },
 
@@ -538,17 +578,20 @@
         [`${C().STAR3_TIME}초 내 클리어`, result.victory && result.time <= C().STAR3_TIME]
       ].map(([label, ok]) => `<li class="${ok ? 'on' : ''}">${label}</li>`).join('');
 
-      const daily = G.Stages[result.stageId].mode === 'daily';
+      const mode = G.Stages[result.stageId].mode;
+      const daily = mode === 'daily';
+      const tower = mode === 'tower';
       let body = '';
       if (summary && result.victory) {
         const rewards = [];
         if (summary.gold) rewards.push(`🪙 +${fmt(summary.gold)}`);
         if (summary.exp) rewards.push(`EXP +${fmt(summary.exp)}`);
-        if (summary.gems) rewards.push(`💎 +${summary.gems} 첫 클리어`);
+        if (summary.gems) rewards.push(`💎 +${summary.gems} ${tower ? '첫 돌파' : '첫 클리어'}`);
         const items = [];
         for (const l of summary.levelUps) items.push(`<li>${esc(l.name)} <span class="up">Lv.${l.from} → Lv.${l.to}${l.max ? ' MAX' : ''}</span></li>`);
         for (const f of summary.firstMax) items.push(`<li>🏆 ${esc(f.name)} 첫 MAX 보상 🪙 +${fmt(f.gold)} 💎 +${f.gems}</li>`);
         if (summary.drop) items.push(`<li>🎁 획득: ${esc(P().charOf(summary.drop.unit).name)} ${stars(summary.drop.unit.grade)} ${summary.drop.isNew ? '<span class="badge new">NEW</span>' : ''}</li>`);
+        if (tower) items.push(summary.firstClear ? `<li>🗼 ${G.Stages[result.stageId].floor}층 돌파! 최고 기록 갱신</li>` : '<li>이미 돌파한 층이라 보상이 없습니다.</li>');
         if (daily) items.push(`<li>오늘 남은 보상 ${summary.runsLeft}/${C().DAILY_DUNGEON_RUNS}회</li>`);
         body = `<div class="reward-row">${rewards.map(r => `<span>${r}</span>`).join('')}</div>
           ${items.length ? `<ul class="result-list">${items.join('')}</ul>` : ''}`;
@@ -559,14 +602,14 @@
       const canNext = summary && result.victory && nextId;
       return `<div class="modal result ${result.victory ? 'win' : 'lose'}">
         <h2>${result.victory ? '승리!' : '패배…'}</h2>
-        ${daily ? '' : `<div class="result-stars">${[0, 1, 2].map(i => `<span class="${i < result.stars ? 'on' : ''}">★</span>`).join('')}</div>
+        ${mode ? '' : `<div class="result-stars">${[0, 1, 2].map(i => `<span class="${i < result.stars ? 'on' : ''}">★</span>`).join('')}</div>
         <ul class="star-conds">${conds}</ul>`}
         <p class="muted" style="text-align:center;margin:0 0 12px">시간 ${fmtTime(result.time)} · 아군 사망 ${result.deaths}</p>
         ${body}
         <div class="modal-actions">
-          <button class="btn" data-action="quit">${!summary ? '로비' : daily ? '던전 선택' : '스테이지 선택'}</button>
+          <button class="btn" data-action="quit">${!summary ? '로비' : daily ? '던전 선택' : tower ? '탑으로' : '스테이지 선택'}</button>
           <button class="btn" data-action="retry" ${daily && summary && !summary.runsLeft ? 'disabled' : ''}>다시 하기</button>
-          ${canNext ? `<button class="btn primary" data-action="startStage" data-id="${nextId}">다음 스테이지 ›</button>` : ''}
+          ${canNext ? `<button class="btn primary" data-action="startStage" data-id="${nextId}">${tower ? '다음 층' : '다음 스테이지'} ›</button>` : ''}
           ${summary && !result.victory ? '<button class="btn primary" data-action="toParty">파티 편성</button>' : ''}
         </div>
       </div>`;

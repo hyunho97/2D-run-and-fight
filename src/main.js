@@ -177,7 +177,9 @@
     };
     if (!debugBattle) {
       const stage = G.Stages[stageId];
-      if (stage.mode === 'daily') {
+      if (stage.mode === 'tower') {
+        if (!P.isStageUnlocked(app.state, stageId)) return;
+      } else if (stage.mode === 'daily') {
         const err = P.dungeonError(app.state, stageId, G.today());
         if (err) { toast(err); return; }
         app.view.dungeon = stage.dungeon;
@@ -204,6 +206,7 @@
   }
 
   function debugBattleOptions() {
+    if (/^TWR_\d+$/.test(params.get('stage'))) G.Tower.stage(Number(params.get('stage').slice(4)));
     const ids = (params.get('party') || '').split(',').filter(id => G.Characters[id]);
     const leader = Number(params.get('leader'));
     return {
@@ -222,7 +225,10 @@
     }
     const summary = debugBattle ? null : P.applyBattleResult(app.state, result, app.rng, G.today());
     if (summary) save();
-    const nextId = G.Stages[result.stageId].mode ? null : P.nextStageId(result.stageId);
+    const stage = G.Stages[result.stageId];
+    const nextId = stage.mode === 'tower'
+      ? (result.victory && stage.floor < G.Config.TOWER_MAX_FLOOR ? G.Tower.stage(stage.floor + 1) : null)
+      : stage.mode ? null : P.nextStageId(result.stageId);
     modal(S.battleResult(app.state, result, summary, nextId && P.isStageUnlocked(app.state, nextId) ? nextId : null));
   }
 
@@ -250,6 +256,7 @@
     lobby: () => go('lobby'),
     stages: () => go('stages', { chapter: null }),
     dungeons: () => go('dungeons'),
+    tower: () => go('tower'),
     dungeon: d => { app.view.dungeon = d.id; render(); },
     party: () => go('party'),
     units: () => go('units', { selecting: false, selected: [] }),
@@ -411,7 +418,7 @@
     startStage: d => { enterLandscape(); startBattle(d.id); },
     resume,
     retry: () => startBattle(app.stageId),
-    quit: () => leaveBattle(debugBattle ? 'lobby' : G.Stages[app.stageId].mode === 'daily' ? 'dungeons' : 'stages'),
+    quit: () => leaveBattle(debugBattle ? 'lobby' : ({ daily: 'dungeons', tower: 'tower' })[G.Stages[app.stageId].mode] || 'stages'),
     toParty: () => leaveBattle('party')
   };
 
