@@ -644,5 +644,16 @@ test('무한의 탑: 해금, 다음 층만 도전, 첫 돌파만 보상', G => {
   eq(P(G).sanitize(JSON.parse(JSON.stringify(s))).tower.best, 1);
 });
 
+test('오프라인 캐시 목록에 index.html이 불러오는 파일이 모두 포함', () => {
+  const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  const sw = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
+  const refs = [...html.matchAll(/(?:src|href)="([^"]+)"/g)].map(m => m[1]).filter(u => !/^https?:|^sw\.js$/.test(u));
+  assert(refs.length > 20);
+  for (const ref of refs) {
+    assert(sw.includes(`'${ref}'`), 'sw.js에 없음: ' + ref);
+    assert(fs.existsSync(path.join(ROOT, ref)), '파일 없음: ' + ref);
+  }
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

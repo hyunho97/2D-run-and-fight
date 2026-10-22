@@ -1,0 +1,138 @@
+<!doctype html>
+<!-- 아이콘·공유 이미지 생성 페이지. ?kind=icon|og 로 열고 창 크기(512x512 / 192x192 / 1200x630)에 맞춰 캡처 -->
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>html, body { margin: 0; overflow: hidden; background: #0b0e15; } canvas { display: block; }</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script src="../src/core.js"></script>
+<script src="../src/config.js"></script>
+<script src="../src/rules.js"></script>
+<script src="../src/data.js"></script>
+<script src="../src/ui/PixelArt.js"></script>
+<script>
+  'use strict';
+  const PA = Game.PixelArt;
+  const W = innerWidth, H = innerHeight;
+  const canvas = document.getElementById('c');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+
+  // 무기를 손에 든 영웅 스프라이트 (무기는 세워서 표시)
+  function heroSprite(charId) {
+    const data = Game.Characters[charId];
+    const art = PA.heroArt(data);
+    const pal = PA.heroPalette(data);
+    const wpn = PA.weapon(art.weapon);
+    const ox = Math.max(0, wpn.grip[0] - PA.HAND.x), oy = Math.max(0, wpn.grip[1] - PA.HAND.y);
+    const cv = document.createElement('canvas');
+    cv.width = 16 + wpn.rows[0].length + ox;
+    const rows = PA.humanoidRows(art.head, 'stand');
+    cv.height = rows.length + oy;
+    const c = cv.getContext('2d');
+    PA.paint(c, rows, pal, ox, oy);
+    PA.paint(c, wpn.rows, pal, ox + PA.HAND.x - wpn.grip[0], oy + PA.HAND.y - wpn.grip[1]);
+    return cv;
+  }
+
+  function enemySprite(id) {
+    const e = Game.Enemies[id];
+    const art = PA.enemyArt(e);
+    const rows = art.kind === 'humanoid' ? PA.humanoidRows(art.head, 'stand') : PA.creatureRows(art.kind);
+    const cv = document.createElement('canvas');
+    cv.width = rows[0].length;
+    cv.height = rows.length;
+    PA.paint(cv.getContext('2d'), rows, PA.enemyPalette(e), 0, 0);
+    return cv;
+  }
+
+  // 바닥선(bottom) 기준으로 정수 배율로 그림. flip이면 좌우 반전
+  function draw(cv, cx, bottom, scale, flip) {
+    const w = cv.width * scale, h = cv.height * scale;
+    ctx.save();
+    ctx.translate(Math.round(cx), Math.round(bottom - h));
+    if (flip) { ctx.scale(-1, 1); ctx.translate(-w, 0); }
+    ctx.drawImage(cv, 0, 0, w, h);
+    ctx.restore();
+  }
+
+  function block(x, y, size, color, charId) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.roundRect(x, y, size, size, size * 0.18);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+    ctx.lineWidth = Math.max(2, size * 0.04);
+    ctx.stroke();
+    const data = Game.Characters[charId];
+    const head = document.createElement('canvas');
+    head.width = 16; head.height = 9;
+    PA.paint(head.getContext('2d'), PA.HEADS[PA.heroArt(data).head], PA.heroPalette(data), 0, 0);
+    const s = Math.floor(size * 0.85 / 16);
+    ctx.drawImage(head, x + (size - 16 * s) / 2, y + (size - 9 * s) / 2, 16 * s, 9 * s);
+  }
+
+  const kind = new URLSearchParams(location.search).get('kind') || 'icon';
+
+  if (kind === 'icon') {
+    // 마스커블 아이콘: 전체 배경 + 안전 영역(중앙 80%) 안에 캐릭터
+    const g = ctx.createRadialGradient(W / 2, H * 0.45, 0, W / 2, H / 2, W * 0.7);
+    g.addColorStop(0, '#2a3a6a');
+    g.addColorStop(1, '#0f1424');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+    const hero = heroSprite('BAS_0001');
+    const scale = Math.floor(H * 0.58 / hero.height);
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.beginPath();
+    ctx.ellipse(W / 2, H * 0.79, W * 0.2, H * 0.035, 0, 0, Math.PI * 2);
+    ctx.fill();
+    draw(hero, W / 2 - (hero.width * scale) / 2, H * 0.79, scale);
+  } else {
+    // 공유 미리보기 1200x630
+    const sky = ctx.createLinearGradient(0, 0, 0, H);
+    sky.addColorStop(0, '#5aa9d6');
+    sky.addColorStop(1, '#d4f1fb');
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#93c4a0';
+    ctx.beginPath();
+    ctx.moveTo(0, 470);
+    for (let x = 0; x <= W; x += 10) ctx.lineTo(x, 440 - Math.sin(x / 140) * 30 - Math.sin(x / 61) * 12);
+    ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.fill();
+    ctx.fillStyle = '#6aa84f';
+    ctx.fillRect(0, 500, W, 18);
+    ctx.fillStyle = '#7a5a3a';
+    ctx.fillRect(0, 518, W, H - 518);
+
+    const heroes = ['BAS_0004', 'BAS_0003', 'BAS_0001'];
+    heroes.forEach((id, i) => draw(heroSprite(id), 70 + i * 120, 506, 6));
+    draw(enemySprite('MON_0001'), 610, 506, 6, true);
+    draw(enemySprite('BOSS_0009'), 770, 506, 13, true);
+
+    ctx.fillStyle = 'rgba(11,14,21,0.82)';
+    ctx.beginPath();
+    ctx.roundRect(40, 34, 700, 190, 22);
+    ctx.fill();
+    ctx.fillStyle = '#ffd23f';
+    ctx.font = '900 76px "Malgun Gothic", "Apple SD Gothic Neo", sans-serif';
+    ctx.fillText('블록 체인 RPG', 72, 122);
+    ctx.fillStyle = '#eef1f7';
+    ctx.font = 'bold 30px "Malgun Gothic", "Apple SD Gothic Neo", sans-serif';
+    ctx.fillText('블록을 이어 스킬을 쓰는 2D 횡스크롤 RPG', 74, 172);
+    ctx.fillStyle = '#9fb0d0';
+    ctx.font = '24px "Malgun Gothic", "Apple SD Gothic Neo", sans-serif';
+    ctx.fillText('설치 없이 브라우저에서 바로 플레이', 74, 206);
+
+    const colors = ['#E05A4F', '#E05A4F', '#E05A4F', '#4F8FE0', '#4F8FE0', '#3FBF6A'];
+    const ids = ['BAS_0001', 'BAS_0001', 'BAS_0001', 'BAS_0004', 'BAS_0004', 'BAS_0003'];
+    ids.forEach((id, i) => block(70 + i * 100 + (i >= 3 ? 20 : 0) + (i >= 5 ? 20 : 0), 540, 84, Game.Characters[id].blockColor || colors[i], id));
+  }
+  document.title = 'ready';
+</script>
+</body>
+</html>

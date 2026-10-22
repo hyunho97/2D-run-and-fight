@@ -261,7 +261,7 @@
           action: 'selToggle', selected: sel.includes(u.uid), disabled: !!P().releaseError(state, u)
         })).join('');
         return `<div class="screen">
-          ${topbar(state, '<h1>방출할 유닛 선택</h1>', 'selCancel')}
+          ${topbar(state, '<h1>선택 방출</h1>', 'selCancel')}
           <div class="filters">${filters}</div>
           <div class="card bulk-bar">
             <span>${sel.length}명 선택 · 🪙 ${fmt(gold)}</span>

@@ -5,6 +5,19 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
 <meta name="theme-color" content="#0b0e15">
 <title>블록 체인 RPG</title>
+<meta name="description" content="블록을 이어 스킬을 쓰는 2D 횡스크롤 RPG. 설치 없이 브라우저에서 바로 플레이.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="블록 체인 RPG">
+<meta property="og:description" content="블록을 이어 스킬을 쓰는 2D 횡스크롤 RPG. 설치 없이 브라우저에서 바로 플레이.">
+<meta property="og:url" content="https://hyunho97.github.io/2D-run-and-fight/">
+<meta property="og:image" content="https://hyunho97.github.io/2D-run-and-fight/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="assets/icon-192.png">
+<link rel="apple-touch-icon" href="assets/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="stylesheet" href="src/ui/style.css">
 </head>
 <body>
@@ -32,5 +45,9 @@
 <script src="src/ui/Sound.js"></script>
 <script src="src/ui/Screens.js"></script>
 <script src="src/main.js"></script>
+<script>
+  // 홈 화면 설치·오프라인 실행 (https 배포 환경에서만)
+  if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js');
+</script>
 </body>
 </html>
