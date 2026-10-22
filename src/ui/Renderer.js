@@ -91,6 +91,14 @@
     return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
   }
 
+  // 챕터 테마별 배경 팔레트
+  const THEMES = {
+    forest: { sky: ['#6ec3e8', '#d4f1fb'], far: '#93c4a0', prop: 'tree', propSpacing: 230,
+      ground: '#7a5a3a', groundTop: '#6aa84f' },
+    desert: { sky: ['#f2a65a', '#fde8c0'], far: '#e0b878', prop: 'cactus', propSpacing: 420, propColor: '#5f9a4a',
+      ground: '#c9965a', groundTop: '#e6c27f' }
+  };
+
   function unitHeight(u) { return u.side === 'hero' ? HERO_H : u.data.size; }
   function hash(n) { const x = Math.sin(n * 127.1) * 43758.5453; return x - Math.floor(x); }
 
@@ -263,15 +271,16 @@
       const ctx = this.ctx;
       const gy = Layout.GROUND_Y;
       const berserk = this.battle.berserk;
+      const theme = THEMES[this.battle.stage.theme] || THEMES.forest;
 
       const sky = ctx.createLinearGradient(0, 0, 0, gy);
-      sky.addColorStop(0, berserk ? '#5a1f2b' : '#6ec3e8');
-      sky.addColorStop(1, berserk ? '#c46b5a' : '#d4f1fb');
+      sky.addColorStop(0, berserk ? '#5a1f2b' : theme.sky[0]);
+      sky.addColorStop(1, berserk ? '#c46b5a' : theme.sky[1]);
       ctx.fillStyle = sky;
       ctx.fillRect(0, 0, W, gy);
 
-      // 원경 산 (패럴랙스 0.15)
-      ctx.fillStyle = berserk ? '#7a4a4a' : '#93c4a0';
+      // 원경 산/사구 (패럴랙스 0.15)
+      ctx.fillStyle = berserk ? '#7a4a4a' : theme.far;
       ctx.beginPath();
       ctx.moveTo(0, gy);
       for (let x = 0; x <= W; x += 16) {
@@ -281,29 +290,48 @@
       ctx.lineTo(W, gy);
       ctx.fill();
 
-      // 나무 (패럴랙스 0.45)
+      // 근경 소품 (패럴랙스 0.45)
       const p = this.camX * 0.45;
-      const spacing = 230;
+      const spacing = theme.propSpacing;
       const first = Math.floor(p / spacing) - 1;
       for (let k = first; k < first + W / spacing + 3; k++) {
         const x = k * spacing - p + hash(k) * 80;
         const s = 0.7 + hash(k + 99) * 0.6;
-        ctx.fillStyle = '#6b4a2e';
-        ctx.fillRect(x - 10 * s, gy - 120 * s, 20 * s, 100 * s);
-        ctx.fillStyle = berserk ? '#5c5a2a' : (k % 2 ? '#3f8a4a' : '#4c9a50');
-        ctx.beginPath();
-        ctx.arc(x, gy - 150 * s, 70 * s, 0, Math.PI * 2);
-        ctx.fill();
+        if (theme.prop === 'cactus') this.drawCactus(x, gy - 20, s, berserk ? '#6a6a2a' : theme.propColor);
+        else this.drawTree(x, gy, s, berserk ? '#5c5a2a' : (k % 2 ? '#3f8a4a' : '#4c9a50'));
       }
 
       // 지면
-      ctx.fillStyle = '#7a5a3a';
+      ctx.fillStyle = theme.ground;
       ctx.fillRect(0, gy - 10, W, Layout.PANEL_Y - gy + 10);
-      ctx.fillStyle = '#6aa84f';
+      ctx.fillStyle = theme.groundTop;
       ctx.fillRect(0, gy - 16, W, 22);
       ctx.fillStyle = 'rgba(0,0,0,0.12)';
       const off = ((this.camX % 120) + 120) % 120;
       for (let x = -off; x < W; x += 120) ctx.fillRect(x, gy + 30, 60, 10);
+    }
+
+    drawTree(x, gy, s, leaf) {
+      const ctx = this.ctx;
+      ctx.fillStyle = '#6b4a2e';
+      ctx.fillRect(x - 10 * s, gy - 120 * s, 20 * s, 100 * s);
+      ctx.fillStyle = leaf;
+      ctx.beginPath();
+      ctx.arc(x, gy - 150 * s, 70 * s, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    drawCactus(x, base, s, color) {
+      const ctx = this.ctx;
+      ctx.fillStyle = color;
+      rr(ctx, x - 14 * s, base - 150 * s, 28 * s, 150 * s, 14 * s);
+      ctx.fill();
+      rr(ctx, x - 50 * s, base - 110 * s, 18 * s, 55 * s, 9 * s);
+      ctx.fill();
+      ctx.fillRect(x - 50 * s, base - 64 * s, 40 * s, 14 * s);
+      rr(ctx, x + 32 * s, base - 130 * s, 18 * s, 60 * s, 9 * s);
+      ctx.fill();
+      ctx.fillRect(x + 10 * s, base - 84 * s, 40 * s, 14 * s);
     }
 
     drawUnits() {
@@ -649,6 +677,50 @@
 
       this.drawTooltip(ui);
       this.drawParty();
+      this.drawHint(ui);
+    }
+
+    // 튜토리얼 안내: 대상 체인 강조 + 말풍선
+    drawHint(ui) {
+      const h = ui.hint;
+      if (!h) return;
+      const slots = this.battle.blocks.slots;
+      const first = slots[h.group.start];
+      const last = slots[h.group.start + h.group.length - 1];
+      if (!first || !last) return;
+      const ctx = this.ctx;
+      const by = Layout.BAR_Y;
+      const x0 = Layout.cellX(first.vx) - 12;
+      const x1 = Layout.cellX(last.vx) + CELL + 12;
+      const pulse = 0.5 + 0.5 * Math.sin(this.t * 8);
+
+      ctx.save();
+      ctx.lineWidth = 7;
+      ctx.strokeStyle = `rgba(255,210,63,${0.55 + 0.45 * pulse})`;
+      rr(ctx, x0, by - 12, x1 - x0, CELL + 24, 28);
+      ctx.stroke();
+
+      const cx = (x0 + x1) / 2;
+      const ay = by - 22 - pulse * 10;
+      ctx.fillStyle = '#FFD23F';
+      ctx.beginPath();
+      ctx.moveTo(cx, ay);
+      ctx.lineTo(cx - 22, ay - 30);
+      ctx.lineTo(cx + 22, ay - 30);
+      ctx.fill();
+
+      ctx.font = `bold 34px ${FONT}`;
+      const w = ctx.measureText(h.text).width + 64;
+      const bx = G.clamp(cx - w / 2, 20, W - w - 20);
+      const bubbleY = by - 140;
+      rr(ctx, bx, bubbleY, w, 78, 22);
+      ctx.fillStyle = 'rgba(12,16,28,0.95)';
+      ctx.fill();
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = '#FFD23F';
+      ctx.stroke();
+      text(ctx, h.text, bx + w / 2, bubbleY + 40, 34, '#ffffff');
+      ctx.restore();
     }
 
     drawTooltip(ui) {

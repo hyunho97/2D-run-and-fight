@@ -52,6 +52,11 @@
     </button>`;
   }
 
+  function soundToggles(settings) {
+    return `<button class="chip ${settings.sfx ? 'on' : ''}" data-action="toggleSfx">${settings.sfx ? '🔊' : '🔇'} 효과음</button>
+      <button class="chip ${settings.bgm ? 'on' : ''}" data-action="toggleBgm">${settings.bgm ? '🎵' : '🔕'} 음악</button>`;
+  }
+
   function sortUnits(units) {
     return units.slice().sort((a, b) => b.grade - a.grade || b.level - a.level || b.enhance - a.enhance || a.uid - b.uid);
   }
@@ -81,15 +86,17 @@
         </div>`;
       }).join('');
 
+      const rec = P().recommendation(state);
       return `<div class="screen">
         ${topbar(state, '<div class="logo">BLOCK CHAIN RPG</div>')}
+        <button class="guide" data-action="${rec.action}" ${rec.uid ? `data-uid="${rec.uid}"` : ''}>${esc(rec.text)} <span>›</span></button>
         <section class="card">
           <h2>현재 파티 <small>전투력 ${fmt(partyPower(state))}</small></h2>
           <div class="party-row">${chips}</div>
         </section>
         <nav class="menu-grid">
           <button class="menu-btn primary" data-action="stages">⚔️<b>모험</b>
-            <small>챕터 1 · 숲 — ${cleared}/${G.StageOrder.length} 클리어${next ? ` · 다음: ${esc(G.Stages[next].name)}` : ' · 전부 클리어!'}</small></button>
+            <small>${cleared}/${G.StageOrder.length} 클리어${next ? ` · 다음: ${esc(G.Stages[next].name)}` : ' · 전부 클리어!'}</small></button>
           <button class="menu-btn" data-action="party">👥<b>파티 편성</b><small>리더·배치 변경</small></button>
           <button class="menu-btn" data-action="units">🎒<b>유닛</b><small>${state.units.length} / ${C().MAX_UNITS} · 합성·강화</small></button>
           <button class="menu-btn" data-action="summon">✨<b>소환</b><small>💎 ${C().SUMMON_COST}</small></button>
@@ -97,30 +104,40 @@
         </nav>
         <footer class="lobby-foot">
           <span>도감 ${Object.keys(state.collection).length} / ${Object.keys(G.Characters).length}</span>
+          <span class="sound-toggles">${soundToggles(state.settings)}</span>
           <button class="link" data-action="reset">데이터 초기화</button>
         </footer>
       </div>`;
     },
 
     // ---- 스테이지 선택 ----
-    stages(state) {
+    stages(state, view) {
       const next = nextStage(state);
-      const cards = G.StageOrder.map(id => {
+      const chapter = G.Chapters.find(c => c.chapter === view.chapter)
+        || G.Chapters.find(c => c.stageIds.includes(next)) || G.Chapters[0];
+      const tabs = G.Chapters.map(c => {
+        const locked = !P().isStageUnlocked(state, c.stageIds[0]);
+        const done = c.stageIds.filter(id => state.stages[id] && state.stages[id].cleared).length;
+        return `<button class="chip ${c === chapter ? 'on' : ''}" data-action="chapter" data-chapter="${c.chapter}" ${locked ? 'disabled' : ''}>
+          ${locked ? '🔒 ' : ''}챕터 ${c.chapter} · ${c.name} <small>${done}/${c.stageIds.length}</small></button>`;
+      }).join('');
+      const cards = chapter.stageIds.map(id => {
         const s = G.Stages[id];
         const rec = state.stages[id] || { cleared: false, stars: 0 };
         const locked = !P().isStageUnlocked(state, id);
         const boss = G.Enemies[s.waves[s.waves.length - 1].monsters[0]];
         const starHtml = [0, 1, 2].map(i => `<span class="${i < rec.stars ? '' : 'off'}">★</span>`).join('');
         return `<button class="stage-card ${id === next ? 'next' : ''}" data-action="startStage" data-id="${id}" ${locked ? 'disabled' : ''}>
-          <div class="stage-no">${locked ? '🔒' : `1-${s.index}`}</div>
+          <div class="stage-no">${locked ? '🔒' : `${s.chapter}-${s.index}`}</div>
           <div class="stage-name">${esc(s.name.replace(/^\S+\s/, ''))}</div>
           <div class="stage-stars">${starHtml}</div>
-          <div class="stage-meta"><span>적 강도 ×${s.statMult.toFixed(2)}</span> · <span>보스 ${esc(boss.name)}</span></div>
-          <div class="stage-reward"><span>🪙 ${s.rewards.gold}</span> · <span>EXP ${s.rewards.exp}</span>${rec.cleared ? '' : ` · <span class="gem">첫 클리어 💎${s.rewards.firstClearGems}</span>`}${rec.bestTime != null ? ` · <span>최고 ${fmtTime(rec.bestTime)}</span>` : ''}</div>
+          <div class="stage-meta"><span>적 강도 ×${s.statMult.toFixed(2)}</span><span>보스 ${esc(boss.name)}</span></div>
+          <div class="stage-reward"><span>🪙 ${s.rewards.gold}</span><span>EXP ${s.rewards.exp}</span>${rec.cleared ? '' : `<span class="gem">첫 클리어 💎${s.rewards.firstClearGems}</span>`}${rec.bestTime != null ? `<span>최고 ${fmtTime(rec.bestTime)}</span>` : ''}</div>
         </button>`;
       }).join('');
       return `<div class="screen">
-        ${topbar(state, '<h1>챕터 1 · 숲</h1>', 'lobby')}
+        ${topbar(state, `<h1>챕터 ${chapter.chapter} · ${chapter.name}</h1>`, 'lobby')}
+        <div class="filters">${tabs}</div>
         <div class="card"><span class="muted">현재 파티 전투력 <b>${fmt(partyPower(state))}</b> · ★ 클리어 / ★★ 아군 사망 없음 / ★★★ ${C().STAR3_TIME}초 내 클리어</span></div>
         <div class="stage-list">${cards}</div>
       </div>`;
@@ -233,6 +250,12 @@
         <section class="card"><h3>강화 <small>+1 ~ +${C().ENHANCE_MAX}</small></h3><div class="action-row">${enhance}</div></section>
         <section class="card"><h3>합성 <small>★N 최대 레벨 × 2 → 랜덤 ★N+1</small></h3><div class="action-row">${synth}</div></section>
         <section class="card"><h3>진화 <small>메인 캐릭터 전용 · 최대 레벨 + +5</small></h3><div class="action-row">${evolve}</div></section>
+        <section class="card"><h3>방출 <small>보관함 정리</small></h3><div class="action-row">
+          ${P().releaseError(state, u)
+            ? `<p>${P().releaseError(state, u)}</p>`
+            : `<p>이 유닛을 내보내고 골드를 받습니다. 되돌릴 수 없습니다.</p>
+               <button class="btn" data-action="release" data-uid="${u.uid}">방출<small>🪙 +${fmt(P().releaseGold(u))}</small></button>`}
+        </div></section>
       </div>`;
     },
 
@@ -297,12 +320,14 @@
       </div>`;
     },
 
-    confirm(title, body, action, danger) {
+    // data: 확인 버튼에 붙일 data-* 값 ({ uid: 3 } → data-uid="3")
+    confirm(title, body, action, danger, data) {
+      const attrs = Object.entries(data || {}).map(([k, v]) => `data-${k}="${esc(v)}"`).join(' ');
       return `<div class="modal ${danger ? 'warn' : ''}">
         <h2>${title}</h2><p>${body}</p>
         <div class="modal-actions">
           <button class="btn" data-action="closeModal">취소</button>
-          <button class="btn ${danger ? 'danger' : 'primary'}" data-action="${action}">확인</button>
+          <button class="btn ${danger ? 'danger' : 'primary'}" data-action="${action}" ${attrs}>확인</button>
         </div>
       </div>`;
     },
@@ -322,10 +347,11 @@
       </div>`;
     },
 
-    pause(stageName) {
+    pause(stageName, settings) {
       return `<div class="modal">
         <h2>일시정지</h2>
         <p style="text-align:center" class="muted">${esc(stageName)}</p>
+        <div class="sound-toggles">${soundToggles(settings)}</div>
         <div class="modal-actions" style="flex-direction:column">
           <button class="btn primary" data-action="resume">계속하기</button>
           <button class="btn" data-action="retry">처음부터 다시</button>

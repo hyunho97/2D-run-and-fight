@@ -276,8 +276,12 @@ test('기본 유닛 576종 (6직업 × 6등급 × 16색), 같은 직업은 같�
   for (let g = 1; g <= 6; g++) eq(basics.filter(c => c.grade === g).length, 96);
 });
 
-test('챕터 1 = 10스테이지, 각 웨이브 3 + 보스', G => {
-  eq(G.StageOrder.length, 10);
+test('챕터별 10스테이지, 각 웨이브 3 + 보스, 적 강도는 순서대로 증가', G => {
+  for (const ch of G.Chapters) eq(ch.stageIds.length, 10, 'chapter ' + ch.chapter);
+  eq(G.StageOrder.length, G.Chapters.length * 10);
+  G.StageOrder.forEach((id, i) => {
+    if (i) assert(G.Stages[id].statMult > G.Stages[G.StageOrder[i - 1]].statMult, id + ' mult');
+  });
   for (const id of G.StageOrder) {
     const s = G.Stages[id];
     eq(s.waves.length, 4, id);
@@ -318,12 +322,15 @@ test('첫 MAX LEVEL 보상은 유닛 종류별 1회', G => {
   assert(!P(G).addExp(s, dup, 1e6).firstMax, 'no second reward');
 });
 
-test('스테이지 해금: 이전 스테이지 클리어 필요', G => {
+test('스테이지 해금: 이전 스테이지 클리어 필요 (챕터 경계 포함)', G => {
   const s = P(G).newState();
   assert(P(G).isStageUnlocked(s, 'STG_01_01'));
   assert(!P(G).isStageUnlocked(s, 'STG_01_02'));
   P(G).applyBattleResult(s, { stageId: 'STG_01_01', victory: true, stars: 2, time: 80 }, () => 0.99);
   assert(P(G).isStageUnlocked(s, 'STG_01_02'));
+  assert(!P(G).isStageUnlocked(s, 'STG_02_01'));
+  P(G).applyBattleResult(s, { stageId: 'STG_01_10', victory: true, stars: 1, time: 100 }, () => 0.99);
+  assert(P(G).isStageUnlocked(s, 'STG_02_01'));
 });
 
 test('승리 보상: 골드·EXP·첫 클리어 보석, 별 최고 기록 유지 / 패배 시 보상 없음', G => {
@@ -437,6 +444,14 @@ test('소환: 보석 소모, ★1/★2 기본 유닛', G => {
   eq([s.gems, unit.grade], [gems - G.Config.SUMMON_COST, 2]);
   s.gems = 0;
   assert(P(G).summonError(s));
+});
+
+test('방출: 파티 제외, 등급별 골드 지급', G => {
+  const s = P(G).newState();
+  assert(P(G).releaseError(s, P(G).findUnit(s, s.party.members[0])), 'party protected');
+  const u = s.units.find(x => !s.party.members.includes(x.uid));
+  const gold = P(G).release(s, u.uid);
+  eq([gold, s.gold, s.units.length], [G.Config.RELEASE_GOLD[0], G.Config.RELEASE_GOLD[0], 5]);
 });
 
 test('파티 배치: 같은 유닛을 다른 칸에 두면 자리 교체', G => {

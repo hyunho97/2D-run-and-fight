@@ -45,8 +45,8 @@
     STARTING_GEMS: 300,
     SUMMON_COST: 100,
     SUMMON_GRADE_RATES: [[1, 0.8], [2, 0.2]],  // [등급, 확률]
-    STAGE_DROP_CHANCE: 0.3,        // 클리어 시 ★1 기본 유닛 드롭
     MAX_UNITS: 200,                // 보관함 최대 칸
+    RELEASE_GOLD: [30, 100, 300, 1000, 3000, 10000],  // TBD 방출 시 등급별 골드
 
     // 7.4 평가
     STAR3_TIME: 90,                // TBD (★★★ 클리어 시간)

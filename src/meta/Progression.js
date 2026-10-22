@@ -20,7 +20,8 @@
         version: SAVE_VERSION, nextUid: 1, gold: 0, gems: C().STARTING_GEMS,
         units: [], party: { members: [], leaderIndex: 0 },
         stages: {}, firstMaxRewarded: {}, collection: {},
-        settings: { speed: 1, auto: false },
+        settings: { speed: 1, auto: false, sfx: true, bgm: true },
+        tutorialDone: false,
         stats: { battles: 0, summons: 0, synths: 0 }
       };
     },
@@ -85,6 +86,20 @@
     nextStageId(stageId) {
       const i = G.StageOrder.indexOf(stageId);
       return i >= 0 && i < G.StageOrder.length - 1 ? G.StageOrder[i + 1] : null;
+    },
+
+    // 로비 추천 행동: { text, action }
+    recommendation(state) {
+      const first = G.StageOrder[0];
+      if (!(state.stages[first] && state.stages[first].cleared)) {
+        return { text: '⚔️ 모험에서 1-1을 시작해 보세요. 블록을 눌러 스킬을 쓰는 게임입니다!', action: 'stages' };
+      }
+      const synth = state.units.find(u => !P.synthesisSelfError(state, u) && P.synthesisCandidates(state, u.uid).length);
+      if (synth) return { text: `🔮 합성할 수 있는 ★${synth.grade} 유닛이 있어요. 합성하면 ★${synth.grade + 1}을 얻습니다.`, action: 'unit', uid: synth.uid };
+      if (!P.summonError(state)) return { text: '✨ 보석이 충분해요. 소환으로 동료를 늘리면 합성 재료가 됩니다.', action: 'summon' };
+      const next = G.StageOrder.find(id => !(state.stages[id] && state.stages[id].cleared));
+      if (next) return { text: `⚔️ 다음 목표: ${G.Stages[next].name}. 막히면 파티에 없는 유닛도 키워서 합성하세요.`, action: 'stages' };
+      return { text: '🏆 모든 스테이지를 클리어했습니다! 별 3개에 도전해 보세요.', action: 'stages' };
     },
 
     // ---- 경험치 / 레벨 ----
@@ -282,6 +297,24 @@
       return { unit: P.createUnit(state, charId), isNew };
     },
 
+    // ---- 방출 (보관함 정리) ----
+    releaseGold(unit) { return C().RELEASE_GOLD[unit.grade - 1]; },
+
+    releaseError(state, unit) {
+      if (P.isInParty(state, unit.uid)) return '파티에 편성된 유닛은 방출할 수 없습니다.';
+      return null;
+    },
+
+    release(state, uid) {
+      const unit = P.findUnit(state, uid);
+      const err = P.releaseError(state, unit);
+      if (err) throw new Error(err);
+      const gold = P.releaseGold(unit);
+      state.units = state.units.filter(u => u.uid !== uid);
+      state.gold += gold;
+      return gold;
+    },
+
     // ---- 저장 데이터 검증 (손상/구버전 데이터 방어) ----
     sanitize(raw) {
       if (!raw || raw.version !== SAVE_VERSION || !Array.isArray(raw.units)) return null;
@@ -324,7 +357,10 @@
       if (raw.settings) {
         state.settings.speed = raw.settings.speed === 2 ? 2 : 1;
         state.settings.auto = !!raw.settings.auto;
+        state.settings.sfx = raw.settings.sfx !== false;
+        state.settings.bgm = raw.settings.bgm !== false;
       }
+      state.tutorialDone = !!raw.tutorialDone || !!(state.stages.STG_01_01 && state.stages.STG_01_01.cleared);
       Object.assign(state.stats, raw.stats);
       return state;
     }

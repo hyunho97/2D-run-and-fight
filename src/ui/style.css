@@ -100,6 +100,13 @@ button:disabled { cursor: not-allowed; }
 /* ---- 로비 ---- */
 .logo { font-size: 24px; font-weight: 900; letter-spacing: 1px; flex: 1;
   background: linear-gradient(90deg, #ffd23f, #ff8a3d); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.guide {
+  display: flex; align-items: center; gap: 10px; width: 100%; margin-bottom: 14px; padding: 14px 16px;
+  text-align: left; font-size: 15px; line-height: 1.5; border-radius: var(--radius);
+  background: linear-gradient(90deg, rgba(255,210,63,.16), rgba(255,210,63,.04)); border: 1px solid rgba(255,210,63,.45);
+}
+.guide span { margin-left: auto; font-size: 24px; color: var(--gold); }
+.guide:hover { border-color: var(--gold); }
 .party-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .party-chip {
   display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 6px;
@@ -119,7 +126,9 @@ button:disabled { cursor: not-allowed; }
 .menu-btn:hover { border-color: #4a5677; transform: translateY(-1px); }
 .menu-btn.primary { grid-column: 1 / -1; background: linear-gradient(135deg, #3a62c9, #6a3fc0); border: 0; min-height: 140px; }
 .menu-btn.primary small { color: #dfe6ff; }
-.lobby-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 18px; color: var(--muted); font-size: 13px; }
+.lobby-foot { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 18px; color: var(--muted); font-size: 13px; }
+.sound-toggles { display: flex; gap: 6px; justify-content: center; }
+.sound-toggles .chip { padding: 6px 12px; font-size: 13px; }
 .link { color: var(--muted); text-decoration: underline; font-size: 13px; padding: 8px; }
 
 /* ---- 스테이지 ---- */
@@ -135,7 +144,7 @@ button:disabled { cursor: not-allowed; }
 .stage-name { font-weight: bold; font-size: 17px; }
 .stage-stars { grid-row: span 3; font-size: 22px; color: var(--gold); }
 .stage-stars .off { color: #3a4055; }
-.stage-meta, .stage-reward { font-size: 13px; color: var(--muted); }
+.stage-meta, .stage-reward { font-size: 13px; color: var(--muted); display: flex; flex-wrap: wrap; column-gap: 12px; }
 .stage-reward .gem { color: var(--gem); font-weight: bold; white-space: nowrap; }
 .stage-reward span, .stage-meta span { white-space: nowrap; }
 
