@@ -16,7 +16,7 @@
   };
 
   function portrait(data, size) {
-    return `<div class="portrait ${size || ''}" style="--c:${data.blockColor}">${G.Classes[data.class].glyph}</div>`;
+    return `<div class="portrait ${size || ''}" style="--c:${data.blockColor}"><img src="${G.PixelArt.portraitUrl(data)}" alt="${G.Classes[data.class].name}"></div>`;
   }
 
   function topbar(state, title, back) {

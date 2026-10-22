@@ -21,7 +21,9 @@ body { display: flex; align-items: center; justify-content: center; }
 button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; }
 button:disabled { cursor: not-allowed; }
 
-#game { display: none; touch-action: none; user-select: none; -webkit-user-select: none; }
+/* Phaser가 크기를 계산할 수 있도록 display:none 대신 visibility로 숨김 */
+#game-wrap { position: fixed; inset: 0; visibility: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
+body.in-battle #game-wrap { visibility: visible; }
 
 #ui {
   position: fixed; inset: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
@@ -74,6 +76,8 @@ button:disabled { cursor: not-allowed; }
   font-weight: bold; font-size: 26px; color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,.45);
 }
 .portrait.lg { width: 96px; height: 96px; font-size: 46px; border-radius: 18px; }
+.portrait { overflow: hidden; align-items: end; }
+.portrait img { width: 82%; image-rendering: pixelated; display: block; }
 
 .badge { font-size: 11px; padding: 2px 7px; border-radius: 999px; background: var(--line); font-weight: bold; white-space: nowrap; }
 .badge.party { background: #2b5a3a; color: #9ff0b0; }

@@ -11,11 +11,10 @@
   const P = G.Progression;
   const S = G.Screens;
 
-  const canvas = document.getElementById('game');
+  const gameWrap = document.getElementById('game-wrap');
   const uiRoot = document.getElementById('ui');
   const modalRoot = document.getElementById('modal');
   const toastEl = document.getElementById('toast');
-  const renderer = new G.Renderer(canvas);
   const params = new URLSearchParams(location.search);
   const debugBattle = ['party', 'stage', 'warp', 'seed'].some(k => params.has(k));
 
@@ -45,7 +44,6 @@
   function render() {
     const inBattle = !!app.battle;
     document.body.classList.toggle('in-battle', inBattle);
-    canvas.style.display = inBattle ? 'block' : 'none';
     uiRoot.style.display = inBattle ? 'none' : 'block';
     if (inBattle) return;
     G.Sound.setBgm('lobby');
@@ -160,7 +158,6 @@
     const warp = debugBattle ? Number(params.get('warp')) || 0 : 0;
     while (app.battle.time < warp && !app.battle.isOver) app.battle.update(STEP);
     app.battle.drainEvents();
-    renderer.reset(app.battle);
     Object.assign(app.ui, { paused: false, holdIndex: -1 });
     tutorial.start(app.battle);
     if (tutorial.step === 0) app.battle.auto = false;   // 튜토리얼은 직접 조작
@@ -170,7 +167,7 @@
     app.press = null;
     modal('');
     render();
-    fit();
+    view.start(app.battle);
   }
 
   function debugBattleOptions() {
@@ -198,6 +195,7 @@
 
   function leaveBattle(screen) {
     app.battle = null;
+    view.stop();
     go(screen);
   }
 
@@ -325,14 +323,8 @@
   modalRoot.addEventListener('click', dispatch);
 
   // ---- 전투 입력 ----
-  function fit() {
-    const scale = Math.min(window.innerWidth / L.W, window.innerHeight / L.H);
-    canvas.style.width = Math.floor(L.W * scale) + 'px';
-    canvas.style.height = Math.floor(L.H * scale) + 'px';
-  }
-
   function toLogical(e) {
-    const r = canvas.getBoundingClientRect();
+    const r = view.canvas.getBoundingClientRect();
     return { x: (e.clientX - r.left) * L.W / r.width, y: (e.clientY - r.top) * L.H / r.height };
   }
 
@@ -347,7 +339,7 @@
     save();
   }
 
-  canvas.addEventListener('pointerdown', e => {
+  gameWrap.addEventListener('pointerdown', e => {
     e.preventDefault();
     const b = app.battle;
     if (!b || b.isOver || app.ui.paused) return;
@@ -359,13 +351,13 @@
     if (idx >= 0) app.press = { idx, t: performance.now(), long: false };
   });
 
-  canvas.addEventListener('pointerup', () => {
+  gameWrap.addEventListener('pointerup', () => {
     if (app.press && !app.press.long && app.battle && !app.ui.paused) playerTap(app.press.idx);
     app.press = null;
     app.ui.holdIndex = -1;
   });
-  canvas.addEventListener('pointercancel', () => { app.press = null; app.ui.holdIndex = -1; });
-  canvas.addEventListener('contextmenu', e => e.preventDefault());
+  gameWrap.addEventListener('pointercancel', () => { app.press = null; app.ui.holdIndex = -1; });
+  gameWrap.addEventListener('contextmenu', e => e.preventDefault());
 
   window.addEventListener('keydown', e => {
     const b = app.battle;
@@ -383,7 +375,6 @@
     else if (/^Digit[1-9]$/.test(e.code)) playerTap(Number(e.code.slice(5)) - 1);
   });
 
-  window.addEventListener('resize', fit);
   window.addEventListener('blur', pause);
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
@@ -397,46 +388,38 @@
   window.addEventListener('pointerdown', () => G.Sound.unlock(), true);
   window.addEventListener('keydown', () => G.Sound.unlock(), true);
 
-  // ---- 루프 ----
-  let last = performance.now();
+  // ---- 루프 (Phaser 게임 루프가 매 프레임 호출) ----
   let acc = 0;
-  function frame(now) {
-    const real = Math.min(0.1, (now - last) / 1000);
-    last = now;
+  function tick(real) {
     const b = app.battle;
-    if (b) {
-      if (app.press && !app.press.long && now - app.press.t >= LONG_PRESS_MS) {
-        app.press.long = true;
-        app.ui.holdIndex = app.press.idx;
-      }
-      if (!app.ui.paused && !b.isOver) tutorial.update(b, real);
-      if (!app.ui.paused && !b.isOver && !tutorial.blocking) {
-        acc += real * app.ui.speed;
-        while (acc >= STEP) {
-          b.update(STEP);
-          acc -= STEP;
-        }
-      } else {
-        acc = 0;
-      }
-      if (b.isOver && !app.resultShown) {
-        app.endTimer += real;
-        if (app.endTimer >= RESULT_DELAY) {
-          app.resultShown = true;
-          onBattleEnd();
-        }
-      }
-      const events = b.drainEvents();
-      renderer.consume(events);
-      G.Sound.consume(events);
-      renderer.update(app.ui.paused ? 0 : real * app.ui.speed, real);
-      renderer.draw(app.ui);
+    if (!b) return null;
+    if (app.press && !app.press.long && performance.now() - app.press.t >= LONG_PRESS_MS) {
+      app.press.long = true;
+      app.ui.holdIndex = app.press.idx;
     }
-    requestAnimationFrame(frame);
+    if (!app.ui.paused && !b.isOver) tutorial.update(b, real);
+    if (!app.ui.paused && !b.isOver && !tutorial.blocking) {
+      acc += real * app.ui.speed;
+      while (acc >= STEP) {
+        b.update(STEP);
+        acc -= STEP;
+      }
+    } else {
+      acc = 0;
+    }
+    if (b.isOver && !app.resultShown) {
+      app.endTimer += real;
+      if (app.endTimer >= RESULT_DELAY) {
+        app.resultShown = true;
+        onBattleEnd();
+      }
+    }
+    const events = b.drainEvents();
+    G.Sound.consume(events);
+    return { events, dt: app.ui.paused ? 0 : real * app.ui.speed, ui: app.ui };
   }
 
-  fit();
+  const view = new G.BattleView(gameWrap, { tick });
   if (debugBattle) startBattle();
   else render();
-  requestAnimationFrame(frame);
 })(window.Game = window.Game || {});

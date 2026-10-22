@@ -8,11 +8,12 @@
 <link rel="stylesheet" href="src/ui/style.css">
 </head>
 <body>
-<canvas id="game"></canvas>
+<div id="game-wrap"></div>
 <div id="ui"></div>
 <div id="modal"></div>
 <div id="toast" role="status"></div>
 <div id="rotate-hint">📱 화면을 가로로 돌리면 더 크게 플레이할 수 있어요</div>
+<script src="vendor/phaser.min.js"></script>
 <script src="src/core.js"></script>
 <script src="src/config.js"></script>
 <script src="src/rules.js"></script>
@@ -26,7 +27,8 @@
 <script src="src/battle/BattleManager.js"></script>
 <script src="src/meta/Progression.js"></script>
 <script src="src/meta/SaveManager.js"></script>
-<script src="src/ui/Renderer.js"></script>
+<script src="src/ui/PixelArt.js"></script>
+<script src="src/ui/BattleView.js"></script>
 <script src="src/ui/Sound.js"></script>
 <script src="src/ui/Screens.js"></script>
 <script src="src/main.js"></script>

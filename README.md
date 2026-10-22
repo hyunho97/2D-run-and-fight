@@ -4,7 +4,7 @@
 
 설치 없이 링크만 열면 PC·모바일 브라우저에서 바로 플레이할 수 있습니다. 진행 상황은 각자의 브라우저(localStorage)에 저장됩니다.
 
-HTML5 Canvas + 순수 JavaScript, 빌드/서버 불필요. (기획서는 비공개)
+[Phaser 3](https://phaser.io) (무료 오픈소스 2D 엔진, `vendor/`에 포함) + JavaScript, 빌드/서버 불필요. (기획서는 비공개)
 
 ## 현재 구현 범위
 
@@ -36,7 +36,7 @@ HTML5 Canvas + 순수 JavaScript, 빌드/서버 불필요. (기획서는 비공�
 2. **지원 스킬 게이지 / 와일드 블록** — 충전 조건·수치 확정 필요
 3. **장비** (무기/방어구/장신구), 스킬 강화
 4. **챕터 3** 이후 스테이지, 게임 모드(무한의 탑·일일 던전 등)
-5. **아트/사운드** — 현재 도형 플레이스홀더
+5. **아트** — 현재는 코드로 그린 도트 그래픽(템플릿 + 의상 색 바리에이션). 정식 아트가 나오면 텍스처만 교체
 
 ## 배포
 
@@ -89,12 +89,14 @@ src/
     Progression.js                 보상, 레벨업, 합성, 강화, 진화, 소환, 세이브 검증
     SaveManager.js                 localStorage 저장/불러오기
   ui/
-    Renderer.js                    전투 Canvas 렌더링 / 연출
+    BattleView.js                  전투 화면 (Phaser 씬: 유닛 애니메이션, 이펙트, HUD)
+    PixelArt.js                    도트 템플릿(인간형·적·무기)과 팔레트 — 576종 색 바리에이션
     Screens.js, style.css          메뉴 화면 (DOM)
     Sound.js                       효과음/BGM (Web Audio 합성)
   main.js                          화면 전환, 게임 루프, 입력
 tests/run-tests.js                 Node 단위 테스트
 tools/simulate.js                  헤드리스 밸런스 시뮬레이터
+vendor/phaser.min.js               Phaser 3.80.1 (MIT)
 ```
 
 `battle/`, `meta/`는 DOM에 의존하지 않아 Node에서 그대로 실행됩니다.

@@ -17,7 +17,8 @@ const LOGIC_FILES = [
   'src/battle/BlockManager.js',
   'src/battle/SkillExecutor.js',
   'src/battle/BattleManager.js',
-  'src/meta/Progression.js'
+  'src/meta/Progression.js',
+  'src/ui/PixelArt.js'
 ];
 
 function loadGame() {
@@ -288,6 +289,11 @@ test('챕터별 10스테이지, 각 웨이브 3 + 보스, 적 강도는 순서�
     assert(s.waves[3].isBoss && G.Enemies[s.waves[3].monsters[0]].isBoss, id + ' boss');
     s.waves.forEach(w => w.monsters.forEach(m => assert(G.Enemies[m], m)));
   }
+});
+
+test('도트 템플릿: 행 길이·팔레트 키 정상, 모든 적에 외형 지정', G => {
+  eq(G.PixelArt.validate(), []);
+  for (const id of Object.keys(G.Enemies)) assert(G.PixelArt.ENEMY_ART[id], 'art for ' + id);
 });
 
 console.log('Progression');
