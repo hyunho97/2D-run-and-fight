@@ -424,6 +424,27 @@ test('스테이지 해금: 이전 스테이지 클리어 필요 (챕터 경계 �
   assert(P(G).isStageUnlocked(s, 'STG_02_01'));
 });
 
+test('챕터 1 클리어 보상: 1-10 첫 클리어 시 모카 ★4 1회 지급', G => {
+  const s = P(G).newState();
+  const win = id => P(G).applyBattleResult(s, { stageId: id, victory: true, stars: 1, time: 100 }, () => 0.99);
+  eq(win('STG_01_09').chapterRewards, []);
+  const r = win('STG_01_10');
+  eq(r.chapterRewards.map(x => [x.chapter, x.unit.charId, x.unit.grade, x.isNew]), [[1, 'CHR_0001', 4, true]]);
+  eq(win('STG_01_10').chapterRewards, [], 'second clear');
+  eq(s.units.filter(u => u.charId === 'CHR_0001').length, 1);
+  eq(P(G).sanitize(JSON.parse(JSON.stringify(s))).chapterRewards, [1]);
+});
+
+test('챕터 보상 추가 전에 1-10 을 클리어한 세이브: 불러온 뒤 한 번만 지급', G => {
+  const s = P(G).newState();
+  s.stages.STG_01_10 = { cleared: true, stars: 1, bestTime: 100 };
+  const old = JSON.parse(JSON.stringify(s));
+  delete old.chapterRewards;
+  const loaded = P(G).sanitize(old);
+  eq(P(G).claimChapterRewards(loaded).map(x => x.unit.charId), ['CHR_0001']);
+  eq(P(G).claimChapterRewards(loaded), []);
+});
+
 test('승리 보상: 골드·EXP·첫 클리어 보석, 별 최고 기록 유지 / 패배 시 보상 없음', G => {
   const s = P(G).newState();
   const res = (victory, stars) => ({ stageId: 'STG_01_01', victory, stars, time: 80 });

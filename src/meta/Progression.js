@@ -24,6 +24,7 @@
         tutorialDone: false,
         collectionClaimed: [],
         daily: { date: '', runs: {} },
+        chapterRewards: [],              // 챕터 클리어 유닛 보상을 받은 챕터 번호
         tower: { best: 0 },              // 7.3 무한의 탑 최고 돌파 층   // 7.3 일일 던전: 로컬 날짜(YYYY-MM-DD)별 보상 횟수
         stats: { battles: 0, summons: 0, synths: 0 }
       };
@@ -195,6 +196,9 @@
         rec.bestTime = rec.bestTime == null ? result.time : Math.min(rec.bestTime, result.time);
       }
 
+      // 챕터 마지막 스테이지 첫 클리어: 챕터 유닛 보상 (보관함이 가득 차도 지급)
+      summary.chapterRewards = summary.firstClear && !stage.mode ? P.claimChapterRewards(state) : [];
+
       // 탑은 첫 돌파 때만 보상
       const paid = stage.mode !== 'tower' || summary.firstClear;
       summary.gold = paid ? stage.rewards.gold : 0;
@@ -223,6 +227,21 @@
         }
       }
       return summary;
+    },
+
+    // 마지막 스테이지를 클리어했지만 아직 받지 않은 챕터 유닛 보상을 지급. [{ chapter, unit, isNew }]
+    // 전투 승리 때 호출하고, 기능 추가 전에 이미 클리어한 세이브를 위해 불러온 직후에도 호출한다
+    claimChapterRewards(state) {
+      const got = [];
+      for (const ch of G.Chapters) {
+        const charId = ch.reward.unit;
+        const last = state.stages[ch.stageIds[ch.stageIds.length - 1]];
+        if (!charId || !last || !last.cleared || state.chapterRewards.includes(ch.chapter)) continue;
+        const isNew = !state.collection[charId];
+        state.chapterRewards.push(ch.chapter);
+        got.push({ chapter: ch.chapter, unit: P.createUnit(state, charId), isNew });
+      }
+      return got;
     },
 
     // ---- 유닛 풀 ----
@@ -470,6 +489,7 @@
           if (n) state.daily.runs[d.id] = num(n, 0, C().DAILY_DUNGEON_RUNS, 0);
         }
       }
+      state.chapterRewards = (raw.chapterRewards || []).filter((n, i, arr) => G.Chapters.some(c => c.chapter === n) && arr.indexOf(n) === i);
       if (raw.tower) state.tower.best = num(raw.tower.best, 0, C().TOWER_MAX_FLOOR, 0);
       state.tutorialDone = !!raw.tutorialDone || !!(state.stages.STG_01_01 && state.stages.STG_01_01.cleared);
       Object.assign(state.stats, raw.stats);

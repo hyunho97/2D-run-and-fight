@@ -231,7 +231,7 @@
   // stages: [이름, [웨이브1, 웨이브2, 웨이브3], 보스]
   G.Chapters = [
     { chapter: 1, name: '숲', theme: 'forest', multStart: 1, multStep: 0.13,
-      reward: { gold: [100, 30], exp: [60, 25], gems: 50, finalGems: 150 },
+      reward: { gold: [100, 30], exp: [60, 25], gems: 50, finalGems: 150, unit: 'CHR_0001' },   // unit: 마지막 스테이지 첫 클리어 시 지급
       drops: [{ grade: 1, chance: 0.3 }],
       stages: [
         ['숲의 입구', [['MON_0001', 'MON_0001'], ['MON_0001', 'MON_0002'], ['MON_0001', 'MON_0001', 'MON_0002']], 'BOSS_0002'],

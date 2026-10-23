@@ -546,5 +546,13 @@
   const view = new G.BattleView(gameWrap, { tick });
   if (debugBattle) G.debug = { app, playerTap };   // 디버그 URL 전용: 자동 화면 검증용 핸들
   if (debugBattle) startBattle();
-  else render();
+  else {
+    // 챕터 유닛 보상이 생기기 전에 이미 챕터를 클리어한 세이브: 불러온 직후 한 번 지급
+    const late = P.claimChapterRewards(app.state);
+    if (late.length) {
+      save();
+      toast(late.map(r => `🎁 챕터 ${r.chapter} 클리어 보상: ${P.charOf(r.unit).name} ★${r.unit.grade} 획득!`).join(' '), 'good');
+    }
+    render();
+  }
 })(window.Game = window.Game || {});

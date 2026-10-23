@@ -145,6 +145,8 @@
       return `<div class="screen">
         ${topbar(state, `<h1>챕터 ${chapter.chapter} · ${chapter.name}</h1>`, 'lobby')}
         <div class="filters">${tabs}</div>
+        ${chapter.reward.unit && !state.chapterRewards.includes(chapter.chapter)
+          ? `<div class="card">🎁 챕터 클리어 보상: <b>${esc(G.Characters[chapter.reward.unit].name)}</b> ${stars(G.Characters[chapter.reward.unit].grade)} <span class="muted">(${chapter.chapter}-${chapter.stageIds.length} 첫 클리어 시 획득)</span></div>` : ''}
         <div class="card"><span class="muted">현재 파티 전투력 <b>${fmt(partyPower(state))}</b> · ★ 클리어 / ★★ 아군 사망 없음 / ★★★ ${C().STAR3_TIME}초 내 클리어</span></div>
         <div class="stage-list">${cards}</div>
       </div>`;
@@ -597,6 +599,11 @@
         const items = [];
         for (const l of summary.levelUps) items.push(`<li>${esc(l.name)} <span class="up">Lv.${l.from} → Lv.${l.to}${l.max ? ' MAX' : ''}</span></li>`);
         for (const f of summary.firstMax) items.push(`<li>🏆 ${esc(f.name)} 첫 MAX 보상 🪙 +${fmt(f.gold)} 💎 +${f.gems}</li>`);
+        for (const r of summary.chapterRewards || []) {
+          const d = P().charOf(r.unit);
+          items.push(`<li>🎁 챕터 ${r.chapter} 클리어 보상: <b>${esc(d.name)}</b> ${stars(r.unit.grade)} ${r.isNew ? '<span class="badge new">NEW</span>' : ''}`
+            + `${d.lines ? `<br><i>"${esc(d.lines.summon)}"</i>` : ''}</li>`);
+        }
         if (summary.drop) items.push(`<li>🎁 획득: ${esc(P().charOf(summary.drop.unit).name)} ${stars(summary.drop.unit.grade)} ${summary.drop.isNew ? '<span class="badge new">NEW</span>' : ''}</li>`);
         if (tower) items.push(summary.firstClear ? `<li>🗼 ${G.Stages[result.stageId].floor}층 돌파! 최고 기록 갱신</li>` : '<li>이미 돌파한 층이라 보상이 없습니다.</li>');
         if (daily) items.push(`<li>오늘 남은 보상 ${summary.runsLeft}/${C().DAILY_DUNGEON_RUNS}회</li>`);
