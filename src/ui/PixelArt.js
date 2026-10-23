@@ -162,6 +162,20 @@
   const ARROW = { rows: ['......k.', 'wwwwwwmk', '......k.'] };
   const ORB = { rows: ['.kk.', 'kpfk', 'kppk', '.kk.'] };
   const TRAP = { rows: ['k.k.k.k.', 'mkmkmkmk', 'kmmmmmmk', '.kkkkkk.'] };
+  const EMBER = { rows: ['.krk.', 'krgrk', 'rgfgr', 'krgrk', '.krk.'] };
+  const STAR = { rows: ['..g..', '.gfg.', 'gfffg', '.gfg.', '..g..'] };
+
+  // 일러스트 캐릭터 (G.SpriteData 정지 이미지 + 코드 연출). 좌표는 SpriteData 전신 이미지 픽셀 기준
+  //   height: 전투 화면 표시 높이 (이미지 높이와 같게 → 1:1 로 그려 흐림·반짝임 없음), lantern: 랜턴 불빛 위치(빛 번짐 연출), fx: 스킬 연출 세트
+  const SPRITE_ART = {
+    moka: { sprite: 'moka', height: 180, lantern: [109, 80], projectile: 'ember', fx: 'lantern' },
+    // ★5: 깨어난 불씨가 곁을 떠다님 + 금빛 반짝임 / ★6: 별빛 불씨 + 후드 위 별 고리 + 별빛 랜턴
+    //   companion_at·halo_at: 발밑 기준 위치(px), sparkle = [색, 초당 개수]
+    moka5: { sprite: 'moka5', height: 180, lantern: [109, 80], projectile: 'ember', fx: 'lantern',
+      companion: 'bulssi', companion_at: [58, -150], sparkle: ['#FFD27A', 1.5] },
+    moka6: { sprite: 'moka6', height: 180, lantern: [109, 80], projectile: 'star', fx: 'lantern', glowTint: 0xbfe0ff,
+      companion: 'bulssi6', companion_at: [58, -150], halo: 5, halo_at: [-6, -190], sparkle: ['#E8F2FF', 4] }
+  };
 
   // ---- 적 전용 템플릿 ----
   const CREATURES = {
@@ -408,7 +422,7 @@
   const urlCache = {};
 
   const PixelArt = {
-    HAND, CLASS_ART, ENEMY_ART, WEAPONS, HEADS, CREATURES,
+    HAND, CLASS_ART, ENEMY_ART, SPRITE_ART, WEAPONS, HEADS, CREATURES,
     BODY_W: 16,
     BODY_H: 19,
 
@@ -418,6 +432,7 @@
     humanoidRows,
 
     heroArt(charData) {
+      if (charData.art && SPRITE_ART[charData.art]) return Object.assign({ kind: 'sprite' }, SPRITE_ART[charData.art]);
       return Object.assign({ kind: 'humanoid' }, CLASS_ART[charData.class]);
     },
 
@@ -434,10 +449,13 @@
     weapon(name) { return WEAPONS[name]; },
     shieldRows() { return SHIELD.rows; },
     crownRows() { return CROWN; },
-    projectileRows(name) { return { arrow: ARROW, orb: ORB, trap: TRAP }[name].rows; },
+    projectileRows(name) { return { arrow: ARROW, orb: ORB, trap: TRAP, ember: EMBER, star: STAR }[name].rows; },
 
-    // 메뉴용 초상화 (머리 + 상반신) data URL
-    portraitUrl(charData) {
+    // 메뉴용 초상화 (머리 + 상반신) data URL. grade: 메인 캐릭터 등급별 외형
+    portraitUrl(charData, grade) {
+      charData = G.charForm(charData, grade);
+      const sprite = SPRITE_ART[charData.art];
+      if (sprite && G.SpriteData) return G.SpriteData[sprite.sprite].head;
       if (urlCache[charData.id]) return urlCache[charData.id];
       const art = CLASS_ART[charData.class];
       const rows = HEADS[art.head].concat(BODY.slice(0, 4));
@@ -473,6 +491,13 @@
       check('arrow', ARROW.rows);
       check('orb', ORB.rows);
       check('trap', TRAP.rows);
+      check('ember', EMBER.rows);
+      check('star', STAR.rows);
+      for (const c of Object.values(G.Characters)) {
+        for (const f of [c].concat(Object.values(c.forms || {}))) {
+          if (f.art && !SPRITE_ART[f.art]) problems.push('sprite art missing ' + c.id + ' ' + f.art);
+        }
+      }
       for (const art of Object.values(CLASS_ART)) {
         if (!HEADS[art.head]) problems.push('class head missing ' + art.head);
         if (!WEAPONS[art.weapon]) problems.push('class weapon missing ' + art.weapon);

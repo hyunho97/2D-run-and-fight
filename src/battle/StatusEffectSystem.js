@@ -5,6 +5,7 @@
   const CC_TYPES = ['Stun', 'Freeze'];
   const STACKABLE = ['Burn'];
   const TICKING = ['Burn', 'Regen'];
+  const DEBUFFS = ['Stun', 'Freeze', 'Burn', 'DefDown', 'Dark'];   // 정화(cleanse)로 지워지는 것
 
   G.StatusEffectSystem = {
     CC_TYPES,
@@ -49,10 +50,13 @@
       unit.statuses = unit.statuses.filter(s => !CC_TYPES.includes(s.type));
     },
 
+    cleanseDebuffs(unit) {
+      unit.statuses = unit.statuses.filter(s => !DEBUFFS.includes(s.type));
+    },
+
     defMultiplier(unit) {
-      return unit.statuses
-        .filter(s => s.type === 'DefDown')
-        .reduce((m, s) => m * (1 - s.value), 1);
+      return unit.statuses.reduce((m, s) =>
+        s.type === 'DefDown' ? m * (1 - s.value) : s.type === 'DefUp' ? m * (1 + s.value) : m, 1);
     },
 
     // 보호막으로 피해 흡수 후 남은 피해량 반환

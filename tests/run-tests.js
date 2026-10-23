@@ -259,6 +259,70 @@ test('성직자 회복 = ATK x 50/120/200%, 최대 HP 초과 불가', G => {
   eq(tank.hp, tank.maxHp);
 });
 
+test('모카 1체인: 아군 전체 회복 + 지속 회복·방어력 버프', G => {
+  const b = newBattle(G, { party: ['BAS_0001', 'CHR_0001', 'BAS_0005'] });
+  runUntil(b, () => b.isCombat, 30);
+  const moka = b.heroes[1];
+  b.heroes.forEach(h => { h.hp = 100; });
+  const def0 = b.heroes[0].defense;
+  b.blocks.slots = [{ owner: moka.uid }];
+  assert(b.tapBlock(0));
+  const heal = Math.round(moka.atk * 0.25);
+  eq(b.heroes.map(h => h.hp), [100 + heal, 100 + heal, 100 + heal]);
+  near(b.heroes[0].defense, def0 * 1.3, 0.01, 'DefUp');
+  assert(b.heroes.every(h => h.statuses.some(s => s.type === 'Regen')), 'regen');
+});
+
+test('모카 2체인: 무작위 적에게 5회 / 3체인: 적 전체 피해 + 아군 회복·정화', G => {
+  const b = newBattle(G, { party: ['BAS_0001', 'CHR_0001', 'BAS_0005'], stageId: 'STG_01_03' });
+  runUntil(b, () => b.isCombat, 30);
+  const moka = b.heroes[1];
+  b.enemies.forEach(e => { e.hp = e.maxHp = 1e6; e.stats.eva = 0; });
+  b.blocks.slots = [{ owner: moka.uid }, { owner: moka.uid }];
+  b.drainEvents();
+  b.tapBlock(0);
+  const ev = b.drainEvents();
+  eq(ev.filter(e => e.type === 'damage' && e.attacker === moka).length, 5);
+  eq(ev.find(e => e.type === 'skill').skill.name, '길 잃은 별');
+
+  b.heroes[0].hp = 100;
+  G.StatusEffectSystem.apply(b.heroes[0], { type: 'Stun', duration: 5 });
+  b.blocks.slots = [{ owner: moka.uid }, { owner: moka.uid }, { owner: moka.uid }];
+  b.tapBlock(0);
+  const ev3 = b.drainEvents();
+  const hit = new Set(ev3.filter(e => e.type === 'damage' && e.attacker === moka).map(e => e.target.uid));
+  eq(hit.size, b.aliveEnemies().length);
+  assert(b.heroes[0].hp > 100, 'healed');
+  assert(!G.StatusEffectSystem.isDisabled(b.heroes[0]), 'cleansed');
+});
+
+test('모카 등급별 형태: ★4 시작, ★5·★6 은 외형·스킬 강화, 진화로 바뀜', G => {
+  const data = G.Characters.CHR_0001;
+  eq(data.grade, 4);
+  eq([4, 5, 6].map(g => G.charForm(data, g).art), ['moka', 'moka5', 'moka6']);
+  eq([4, 5, 6].map(g => G.charForm(data, g).skills.chains[1].damage.hits), [5, 6, 8]);
+  const b = newBattle(G, { party: ['BAS_0001', { charId: 'CHR_0001', grade: 6 }, 'BAS_0005'], stageId: 'STG_01_03' });
+  runUntil(b, () => b.isCombat, 30);
+  const moka = b.heroes[1];
+  eq(moka.data.title, '별빛 등불지기');
+  b.enemies.forEach(e => { e.hp = e.maxHp = 1e6; e.stats.eva = 0; });
+  b.blocks.slots = [{ owner: moka.uid }, { owner: moka.uid }];
+  b.drainEvents();
+  b.tapBlock(0);
+  eq(b.drainEvents().filter(e => e.type === 'damage' && e.attacker === moka).length, 8);
+  b.blocks.slots = [{ owner: moka.uid }];
+  b.tapBlock(0);
+  assert(b.heroes.every(h => h.statuses.some(s => s.type === 'Shield')), '★6 1체인 보호막');
+
+  const s = G.Progression.newState();
+  const u = G.Progression.createUnit(s, 'CHR_0001');
+  eq(u.grade, 4);
+  u.level = G.Rules.maxLevel(4);
+  u.enhance = G.Config.ENHANCE_MAX;
+  G.Progression.evolve(s, u.uid);
+  eq([u.charId, u.grade, G.charForm(G.Progression.charOf(u), u.grade).title], ['CHR_0001', 5, '등불지기']);
+});
+
 test('파티 전멸 시 패배', G => {
   const b = newBattle(G);
   b.heroes.forEach(h => b.kill(h));

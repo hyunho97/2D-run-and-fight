@@ -84,14 +84,37 @@
       this.hudG2 = this.add.graphics().setScrollFactor(0).setDepth(1120);
       this.overlayG = this.add.graphics().setScrollFactor(0).setDepth(1250);
 
-      this.view.onSceneReady(this);
+      this.loadSprites().then(() => {
+        this.ready = true;
+        this.view.onSceneReady(this);
+      });
+    }
+
+    // 일러스트 캐릭터 정지 이미지 (SpriteData 의 data URL → 텍스처 spr_<name>, 얼굴 sprh_<name>)
+    loadSprites() {
+      const list = [];
+      for (const [name, d] of Object.entries(G.SpriteData || {})) {
+        list.push(['spr_' + name, d.body]);
+        if (d.head) list.push(['sprh_' + name, d.head]);
+      }
+      return Promise.all(list.map(([key, url]) => new Promise(done => {
+        const img = new Image();
+        img.onload = () => { this.textures.addImage(key, img); done(); };
+        img.onerror = done;
+        img.src = url;
+      })));
     }
 
     update(time, delta) {
+      if (!this.ready) return;
       const real = Math.min(0.1, delta / 1000);
       const frame = this.view.tick(real);
       if (!frame || !this.battle) return;
       this.t += real;
+      // 렌더 보간: 로직은 1/60초 고정 스텝이라 그대로 그리면 고주사율 화면에서 걸음이 뚝뚝 끊긴다.
+      // 직전 스텝 위치(px)와 현재 위치(x) 사이를 남은 시간 비율(alpha)로 섞은 rx 로 그린다
+      const a = frame.alpha != null ? frame.alpha : 1;
+      for (const u of this.battle.heroes.concat(this.battle.enemies)) u.rx = u.px == null ? u.x : u.px + (u.x - u.px) * a;
       this.consume(frame.events);
       this.renderFrame(frame.dt, real, frame.ui);
     }
@@ -123,9 +146,28 @@
 
     headTex(charData) {
       const art = PA.heroArt(charData);
+      if (art.kind === 'sprite') return 'sprh_' + art.sprite;
       const pal = PA.heroPalette(charData);
       const rows = PA.HEADS[art.head].concat(PA.humanoidRows(art.head, 'stand').slice(9, 13));
       return this.rowsTex('head_' + art.head, rows, pal);
+    }
+
+    // headTex 표시 배율 보정: 도트 얼굴(16px 폭) 기준 배율에 곱한다
+    headK(charData) {
+      const art = PA.heroArt(charData);
+      return art.kind === 'sprite' ? 16 / G.SpriteData[art.sprite].headW : 1;
+    }
+
+    // 랜턴 불빛 (가산 혼합용 방사형 그라데이션)
+    glowTex() {
+      return this.makeTexture('glow', 64, 64, ctx => {
+        const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+        g.addColorStop(0, 'rgba(255,220,140,0.9)');
+        g.addColorStop(0.35, 'rgba(255,150,60,0.45)');
+        g.addColorStop(1, 'rgba(255,120,40,0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, 64, 64);
+      });
     }
 
     skyTex(theme) {
@@ -276,8 +318,37 @@
       let rowsH;
       let body;
       let weapon = null;
+      let glow = null;
+      let companion = null;
+      let halo = null;
 
-      if (art.kind === 'humanoid') {
+      if (art.kind === 'sprite') {
+        // 정지 이미지 1장. 대기·이동·공격은 syncUnits 의 흔들림/크기 변화/이동으로 표현
+        const sd = G.SpriteData[art.sprite];
+        rowsW = sd.w;
+        rowsH = sd.h;
+        scale = art.height / sd.h;
+        body = this.add.image(0, 0, 'spr_' + art.sprite).setOrigin(0.5, 1).setScale(scale);
+        root.add(body);
+        if (art.lantern) {
+          glow = this.add.image((art.lantern[0] - sd.w / 2) * scale, (art.lantern[1] - sd.h) * scale, this.glowTex())
+            .setBlendMode(Phaser.BlendModes.ADD).setTint(art.glowTint || 0xffffff).setScale(1.6);
+          root.add(glow);
+        }
+        if (art.companion) {
+          // 곁을 떠다니는 정령 (★5 깨어난 불씨, ★6 별빛 불씨) + 은은한 빛
+          companion = [
+            this.add.image(0, 0, this.glowTex()).setBlendMode(Phaser.BlendModes.ADD).setTint(art.glowTint || 0xffb060).setScale(0.9),
+            this.add.image(0, 0, 'spr_' + art.companion)
+          ];
+          root.add(companion);
+        }
+        if (art.halo) {
+          // ★6: 후드 위를 도는 별 고리
+          halo = Array.from({ length: art.halo }, () => this.add.image(0, 0, this.projTex('star')).setScale(2.2));
+          root.add(halo);
+        }
+      } else if (art.kind === 'humanoid') {
         rowsW = 16;
         rowsH = 19;
         scale = isHero ? HERO_SCALE : Math.max(3, Math.round(u.data.size * 1.25 / 19));
@@ -308,10 +379,11 @@
       if (!isHero) root.setScale(-1, 1);
 
       v = {
-        unit: u, root, body, weapon, art, scale, isHero,
+        unit: u, root, body, weapon, glow, companion, halo, art, scale, isHero,
         w: rowsW * scale, h: rowsH * scale,
         baseAngle: art.idleAngle || 0,
-        lunge: 0, flash: 0, walkT: 0, lastX: u.x, phase: Math.random() * 6, dead: false
+        lunge: 0, flash: 0, walkT: 0, lastX: u.x, phase: Math.random() * 6, dead: false,
+        squash: 0, hop: 0, hopH: 0   // 일러스트용: 공격 시 찌그러짐, 스킬 시 점프 (트윈으로 0→1→0)
       };
       this.views.set(u.uid, v);
       return v;
@@ -328,16 +400,19 @@
           continue;
         }
         const dir = v.isHero ? 1 : -1;
-        const speed = real > 0 ? Math.abs(u.x - v.lastX) / real : 0;
+        const speed = real > 0 ? Math.abs(u.rx - v.lastX) / real : 0;
         const moving = speed > 30;
-        v.lastX = u.x;
+        v.lastX = u.rx;
         if (moving) v.walkT += real;
         const step = Math.sin(v.walkT * 12);
-        const bob = moving ? -Math.abs(step) * 1.5 * v.scale : 0;
-        v.root.setPosition(u.x + v.lunge * dir, GROUND_Y + bob);
-        if (v.art.kind === 'humanoid') v.body.setFrame(moving && step > 0 ? 'step' : 'stand');
-        const breathe = moving ? 1 : 1 + 0.03 * Math.sin(this.t * 3 + v.phase);
-        v.body.setScale(v.scale, v.scale * breathe);
+        if (v.art.kind === 'sprite') this.poseSprite(v, u, moving, real);
+        else {
+          const bob = moving ? -Math.abs(step) * 1.5 * v.scale : 0;
+          v.root.setPosition(u.rx + v.lunge * dir, GROUND_Y + bob);
+          if (v.art.kind === 'humanoid') v.body.setFrame(moving && step > 0 ? 'step' : 'stand');
+          const breathe = moving ? 1 : 1 + 0.03 * Math.sin(this.t * 3 + v.phase);
+          v.body.setScale(v.scale, v.scale * breathe);
+        }
 
         v.flash = Math.max(0, v.flash - real);
         const parts = v.root.list;
@@ -351,6 +426,67 @@
       for (const [uid, v] of this.views) {
         if (!live.has(uid) && !v.dead) this.killView(v);
         if (!live.has(uid) && v.gone) this.views.delete(uid);
+      }
+    }
+
+    // 정지 이미지 연출. 대기: 위아래로 둥실 + 숨쉬기 / 이동: 종종걸음으로 살짝 튀며 앞으로 기울기 /
+    // 공격: 납작해졌다 늘어나기(squash) / 스킬: 점프하며 커지기(hop). 발밑(원점)은 땅에 고정
+    poseSprite(v, u, moving, real) {
+      const s = v.scale;
+      // 전투 로직은 고정 스텝이라 고주사율 화면에서는 위치가 안 바뀌는 프레임이 섞인다.
+      // 이동 판정을 잠깐 유지하고 대기↔이동 자세를 서서히 섞어서 프레임마다 자세가 튀지 않게 한다
+      v.moveHold = moving ? 0.2 : (v.moveHold || 0) - real;
+      v.mb = (v.mb || 0) + ((v.moveHold > 0 ? 1 : 0) - (v.mb || 0)) * Math.min(1, real * 8);
+      v.walkP = (v.walkP || 0) + real * 7 * v.mb;
+      const m = v.mb;
+
+      const idle = Math.sin(this.t * 2.6 + v.phase);
+      const breathe = Math.sin(this.t * 2.6 + v.phase + 1.2);
+      const step = Math.abs(Math.sin(v.walkP));   // 0 = 착지, 1 = 공중
+      const lerp = (a, b) => a + (b - a) * m;
+      const bob = lerp(-(0.5 + 0.5 * idle) * 6, -step * 7);
+      let sy = lerp(1 + 0.025 * breathe, 1 - 0.035 * (1 - step));   // 착지할 때 살짝 눌림
+      let sx = lerp(1 - 0.01 * breathe, 1 + 0.02 * (1 - step));
+      const angle = 2.5 * m;
+      sx *= 1 + 0.12 * v.squash + 0.1 * v.hop;
+      sy *= 1 - 0.1 * v.squash + 0.1 * v.hop;
+      v.root.setPosition(u.rx + v.lunge, GROUND_Y + bob - v.hop * v.hopH);
+      v.body.setScale(s * sx, s * sy).setAngle(angle - v.squash * 6);
+      if (v.glow) {
+        // 랜턴 불빛: 불규칙하게 일렁이고, 공격·스킬 때 확 밝아짐
+        const flicker = 0.55 + 0.15 * Math.sin(this.t * 7.3 + v.phase) + 0.1 * Math.sin(this.t * 17.1);
+        const lx = (v.art.lantern[0] - v.body.width / 2) * s * sx;
+        const ly = (v.art.lantern[1] - v.body.height) * s * sy;
+        const rad = Phaser.Math.DegToRad(v.body.angle);
+        v.glow.setPosition(lx * Math.cos(rad) - ly * Math.sin(rad), lx * Math.sin(rad) + ly * Math.cos(rad))
+          .setAlpha(Math.min(1, flicker + v.squash * 0.4 + v.hop * 0.5))
+          .setScale(1.6 + 0.8 * v.squash + 1.6 * v.hop);
+      }
+      if (v.companion) {
+        // 정령: 랜턴 위에서 둥실둥실, 걸을 땐 살짝 뒤처져 따라오고, 공격 땐 앞으로 튀어나감
+        const t = this.t + v.phase;
+        const cx = v.art.companion_at[0] + Math.sin(t * 1.7) * 4 - 14 * m + 16 * v.squash;
+        const cy = v.art.companion_at[1] + Math.sin(t * 3.1) * 5 - 6 * m;
+        const k = 1 + 0.6 * v.hop + 0.25 * v.squash;
+        v.companion[0].setPosition(cx, cy).setAlpha(0.45 + 0.15 * Math.sin(t * 6)).setScale(0.9 * k);
+        v.companion[1].setPosition(cx, cy).setScale(k).setAngle(Math.sin(t * 2.3) * 8);
+      }
+      if (v.halo) {
+        const n = v.halo.length;
+        v.halo.forEach((st, i) => {
+          const ang = this.t * 1.4 + i * Math.PI * 2 / n;
+          st.setPosition(v.art.halo_at[0] + Math.cos(ang) * 30, v.art.halo_at[1] + Math.sin(ang) * 7 - v.hop * 10)
+            .setAlpha(0.55 + 0.45 * Math.sin(ang)).setScale(1.6 + 0.8 * Math.max(0, Math.sin(ang)));
+        });
+      }
+      if (v.art.sparkle) {
+        // ★5·★6: 망토 주위로 반짝이가 피어오름
+        v.sparkT = (v.sparkT || 0) + this.game.loop.delta / 1000;
+        const every = 1 / v.art.sparkle[1];
+        while (v.sparkT > every) {
+          v.sparkT -= every;
+          this.twinkle(u.rx + (Math.random() - 0.6) * v.w * 0.7, GROUND_Y - Math.random() * v.h * 0.8, v.art.sparkle[0]);
+        }
       }
     }
 
@@ -373,6 +509,11 @@
       this.tweens.killTweensOf(v);
       v.lunge = 0;
       this.tweens.add({ targets: v, lunge: art.projectile ? 6 : (strong ? 30 : 18), duration: 70, yoyo: true });
+      if (art.kind === 'sprite') {
+        v.squash = 0;
+        v.hop = 0;
+        this.tweens.add({ targets: v, squash: 1, duration: 90, yoyo: true, ease: 'Quad.easeOut' });
+      }
       if (v.weapon) {
         this.tweens.killTweensOf(v.weapon);
         v.weapon.setAngle(v.baseAngle);
@@ -475,6 +616,10 @@
       const color = e.caster.color;
       this.attackAnim(cv, null, e.chain === 3);
       const weapon = cv ? cv.art.weapon : null;
+      if (cv && cv.art.fx === 'lantern') {
+        this.fxLantern(cv, e);
+        return;
+      }
       for (const t of e.targets) {
         if (e.skill.kind === 'heal') this.fxHeal(t, e.chain);
         else if (!cv) this.fxImpact(t, e.chain, color);
@@ -563,6 +708,67 @@
       }
     }
 
+    // 모카(랜턴): 체인마다 다른 스킬. 시전 시 점프하며 랜턴이 밝아진다
+    fxLantern(cv, e) {
+      const caster = e.caster;
+      const warm = cv.art.glowTint ? '#CFE6FF' : '#FFB45A';
+      cv.hopH = 14 + e.chain * 12;
+      this.tweens.add({ targets: cv, hop: 1, duration: 150 + e.chain * 40, yoyo: true, hold: 60 * e.chain, ease: 'Quad.easeOut' });
+      const lx = caster.x + (cv.glow ? cv.glow.x : 0);
+      const ly = GROUND_Y - cv.hopH + (cv.glow ? cv.glow.y : -cv.h * 0.5);
+
+      if (e.chain === 1) {
+        // 등불 밝히기: 랜턴에서 퍼지는 따뜻한 빛 + 아군 회복
+        this.burst(lx, ly, 160, warm, 6, 500);
+        for (const t of e.allies) this.fxHeal(t, 1);
+        this.floatText(caster, '방어력 UP', '#ffd9a8', 30, 40);
+      } else if (e.chain === 2) {
+        // 길 잃은 별: 하늘에서 별이 떨어지는데 일부는 엉뚱한 곳으로
+        e.targets.forEach((t, i) => {
+          const lost = Math.random() < 0.3;
+          const x = t.x + (lost ? (i % 2 ? 1 : -1) * (70 + Math.random() * 60) : (Math.random() - 0.5) * 30);
+          const star = this.add.image(x - 160, 60, this.projTex('star')).setScale(7).setDepth(525)
+            .setVisible(false).setData('fx', true);
+          this.tweens.add({
+            targets: star, x, y: lost ? GROUND_Y - 10 : this.midY(t), angle: 360, duration: 260, delay: i * 110,
+            onStart: () => star.setVisible(true),
+            onComplete: () => {
+              this.spark(x, star.y, lost ? 5 : 10, '#FFE58A');
+              if (!lost) this.burst(x, star.y, 70, '#FFE58A', 4, 260);
+              star.destroy();
+            }
+          });
+        });
+      } else {
+        // 반딧불 대행진: 반딧불 떼가 화면을 가로지르며 적은 피해, 아군은 회복
+        this.floatText(caster, caster.data.lines ? caster.data.lines.skill : '', '#ffe6b0', 36, 90);
+        const cam = this.cameras.main.scrollX;
+        for (let i = 0; i < 36; i++) {
+          const y = 180 + Math.random() * (GROUND_Y - 220);
+          const fly = this.add.image(cam - 40 - Math.random() * 300, y, this.glowTex())
+            .setBlendMode(Phaser.BlendModes.ADD).setTint(cv.art.glowTint || 0xffe27a).setScale(0.35 + Math.random() * 0.3).setDepth(535).setData('fx', true);
+          const p = { t: 0 };
+          const wob = 20 + Math.random() * 40;
+          const sx = fly.x;
+          this.tweens.add({
+            targets: p, t: 1, duration: 1100 + Math.random() * 500, delay: Math.random() * 300, ease: 'Sine.easeInOut',
+            onUpdate: () => fly.setPosition(sx + (W + 400) * p.t, y + Math.sin(p.t * 12 + i) * wob).setAlpha(Math.sin(p.t * Math.PI)),
+            onComplete: () => fly.destroy()
+          });
+        }
+        this.time.delayedCall(450, () => {
+          for (const t of e.targets) {
+            this.burst(t.x, this.midY(t), 150, warm, 8, 450);
+            this.spark(t.x, this.midY(t), 14, '#FFE58A');
+          }
+          for (const t of e.allies) this.fxHeal(t, 2);
+        });
+        if (cv.art.glowTint) this.cameras.main.flash(160, 190, 220, 255);
+        else this.cameras.main.flash(160, 255, 200, 120);
+        this.cutin(caster, e.skill.name);
+      }
+    }
+
     // 회복: 빛기둥 + 상승하는 빛
     fxHeal(t, chain) {
       const w = 60 + chain * 25;
@@ -577,6 +783,12 @@
         fontFamily: FONT, fontSize: size + 'px', fontStyle: 'bold', color, stroke: '#000000', strokeThickness: Math.round(size / 6)
       }).setOrigin(0.5).setDepth(700).setData('fx', true);
       this.tweens.add({ targets: t, y: t.y - 80, alpha: 0, duration: 900, ease: 'Quad.easeOut', onComplete: () => t.destroy() });
+    }
+
+    // 천천히 떠오르며 사라지는 반짝임 하나
+    twinkle(x, y, color) {
+      const p = this.add.image(x, y, 'px').setTint(num(color)).setScale(1.6).setDepth(540).setData('fx', true);
+      this.tweens.add({ targets: p, y: y - 40, scale: 0.4, alpha: 0, duration: 900, ease: 'Sine.easeOut', onComplete: () => p.destroy() });
     }
 
     spark(x, y, n, color, gravity) {
@@ -621,7 +833,7 @@
       band.fillPoints([{ x: 0, y: 330 }, { x: W, y: 300 }, { x: W, y: 430 }, { x: 0, y: 460 }], true);
       band.fillStyle(0x000000, 0.25);
       band.fillRect(0, 452, W, 6);
-      const face = this.add.image(380, 395, this.headTex(caster.data)).setScale(9);
+      const face = this.add.image(380, 395, this.headTex(caster.data)).setScale(9 * this.headK(caster.data));
       const name = this.add.text(W / 2 + 80, 385, `${caster.name} — ${skillName}`, {
         fontFamily: FONT, fontSize: '62px', fontStyle: 'bold', color: '#ffffff', stroke: '#000000', strokeThickness: 10
       }).setOrigin(0.5);
@@ -636,7 +848,7 @@
     // ---- 프레임 렌더 ----
     renderFrame(dt, real, ui) {
       const b = this.battle;
-      this.camX += (b.frontHero().x - 700 - this.camX) * Math.min(1, real * 4);
+      this.camX += (b.frontHero().rx - 700 - this.camX) * Math.min(1, real * 4);
       this.cameras.main.setScroll(this.camX, 0);
       this.far.tilePositionX = this.camX * 0.15;
       this.props.tilePositionX = this.camX * 0.45;
@@ -675,24 +887,24 @@
         const v = this.views.get(u.uid);
         if (!v || (!u.alive && !v.isHero)) continue;
         sg.fillStyle(0x000000, 0.25);
-        sg.fillEllipse(u.x, GROUND_Y + 4, v.w * 0.75, 22);
+        sg.fillEllipse(u.rx, GROUND_Y + 4, v.w * 0.75, 22);
         if (u.berserk && u.alive) {
           sg.fillStyle(0xff2020, 0.18 + 0.1 * Math.sin(this.t * 10));
-          sg.fillEllipse(u.x, GROUND_Y - v.h * 0.5, v.w * 1.3, v.h * 1.25);
+          sg.fillEllipse(u.rx, GROUND_Y - v.h * 0.5, v.w * 1.3, v.h * 1.25);
         }
         if (!u.alive) continue;
-        const top = GROUND_Y - v.h - 18;
+        const top = GROUND_Y - v.h - (v.halo ? 34 : 18);   // 별 고리는 HP 바 아래로 보이게
         if (!u.isBoss) {
           const bw = Math.max(80, v.w * 0.9);
-          this.bar(bg, u.x - bw / 2, top, bw, 10, u.hpRatio, u.side === 'hero' ? (u.hpRatio > 0.3 ? 0x5be36b : 0xff5a5a) : 0xff5a5a);
+          this.bar(bg, u.rx - bw / 2, top, bw, 10, u.hpRatio, u.side === 'hero' ? (u.hpRatio > 0.3 ? 0x5be36b : 0xff5a5a) : 0xff5a5a);
         }
-        if (u.isLeader) this.txt('crown' + u.uid, u.x, top - 26, '♛', 30, '#FFD23F', { world: true });
-        if (G.StatusEffectSystem.isDisabled(u)) this.txt('cc' + u.uid, u.x, top - 30, '💫', 30, '#ffffff', { world: true });
+        if (u.isLeader) this.txt('crown' + u.uid, u.rx, top - 26, '♛', 30, '#FFD23F', { world: true });
+        if (G.StatusEffectSystem.isDisabled(u)) this.txt('cc' + u.uid, u.rx, top - 30, '💫', 30, '#ffffff', { world: true });
         if (u.cast) {
           const cw = 240;
           const cy = top - 40;
-          this.bar(bg, u.x - cw / 2, cy, cw, 14, 1 - u.cast.remaining / u.cast.total, 0xff9f43);
-          this.txt('cast' + u.uid, u.x, cy - 24, u.cast.name, 28, '#ffd9a8', { world: true });
+          this.bar(bg, u.rx - cw / 2, cy, cw, 14, 1 - u.cast.remaining / u.cast.total, 0xff9f43);
+          this.txt('cast' + u.uid, u.rx, cy - 24, u.cast.name, 28, '#ffd9a8', { world: true });
         }
       }
     }
@@ -837,7 +1049,7 @@
         g.fillRoundedRect(x + 8, y + 8, CELL - 16, (CELL - 16) / 2, { tl: 18, tr: 18, bl: 0, br: 0 });
         g.lineStyle(4, shadeNum(owner.color, -0.55), 1);
         g.strokeRoundedRect(x + 8, y + 8, CELL - 16, CELL - 16, 18);
-        this.img('blk' + i, this.headTex(owner.data), x + CELL / 2, y + CELL / 2 + 4, 6.5, 1110);
+        this.img('blk' + i, this.headTex(owner.data), x + CELL / 2, y + CELL / 2 + 4, 6.5 * this.headK(owner.data), 1110);
       });
 
       for (const grp of groups) {
@@ -881,7 +1093,7 @@
         g.fillRoundedRect(x, y, cw, 112, 16);
         g.fillStyle(num(h.color), a);
         g.fillRoundedRect(x + 14, y + 14, 84, 84, 14);
-        this.img('party' + i, this.headTex(h.data), x + 56, y + 52, 5, 1110, a);
+        this.img('party' + i, this.headTex(h.data), x + 56, y + 52, 5 * this.headK(h.data), 1110, a);
         this.txt('pgrade' + i, x + 56, y + 88, '★' + h.grade, 18, '#FFD23F', { alpha: a });
         this.txt('pname' + i, x + 116, y + 32, (h.isLeader ? '♛ ' : '') + h.name, 24, h.isLeader ? '#FFD23F' : '#ffffff', { align: 'left', alpha: a });
         this.txt('plv' + i, x + cw - 18, y + 32, 'Lv.' + h.level, 20, '#c8d0e0', { align: 'right', alpha: a });
@@ -898,7 +1110,7 @@
       const owner = b.heroes.find(h => h.uid === group.owner);
       const skill = G.SkillExecutor.skillOf(owner);
       const g = this.overlayG;
-      const w = 620;
+      const w = skill.chains ? 820 : 620;
       const h = 190;
       const x = G.clamp(Layout.cellX(ui.holdIndex) + CELL / 2 - w / 2, 20, W - w - 20);
       const y = Layout.BAR_Y - h - 24;
@@ -909,9 +1121,12 @@
       const o = { align: 'left', depth: 1260 };
       this.txt('tipTitle', x + 28, y + 36, `${owner.name} · ${skill.name}`, 32, '#ffffff', o);
       const unit = skill.kind === 'heal' ? '아군 회복 ATK ' : '피해 ';
-      skill.coef.forEach((c, i) => {
+      const lines = skill.chains
+        ? skill.chains.map((c, i) => `${i + 1}체인 ${c.name}: ${c.brief}`)
+        : skill.coef.map((c, i) => `${i + 1}체인: ${unit}${Math.round(c * 100)}%`);
+      lines.forEach((line, i) => {
         const active = i + 1 === group.length;
-        this.txt('tip' + i, x + 28, y + 84 + i * 36, `${i + 1}체인: ${unit}${Math.round(c * 100)}%`, 28, active ? '#FFD23F' : '#8a93a8', o);
+        this.txt('tip' + i, x + 28, y + 84 + i * 36, line, 28, active ? '#FFD23F' : '#8a93a8', o);
       });
     }
 

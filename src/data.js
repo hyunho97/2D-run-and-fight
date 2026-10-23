@@ -66,8 +66,96 @@
     });
   }
 
-  // 4.3 메인 캐릭터 — 상세 설계 보류. 형식만 정의 (type: 'Main' | 'Limited', grade: 4, skills 고유)
-  // 예) G.Characters.CHR_0001 = { id, name, class, type: 'Main', grade: 4, element, baseStats, blockColor, skills }
+  // 4.3 메인 캐릭터 (type: 'Main' | 'Limited'). ★4 부터 시작하고 진화로 ★5·★6 이 된다.
+  // 기본 유닛과 달리 체인마다 다른 고유 스킬(skills.chains)과 일러스트 정지 이미지(art → PixelArt.SPRITE_ART)를 쓴다.
+  // forms[등급]: 그 등급부터 덮어쓸 값 (title, art, skills ...). G.charForm 으로 합친다
+  // chains[i]: { name, brief(툴팁), desc(상세), damage: { target, coef, hits }, heal: { target, coef }, buffs, cleanse }
+  //   damage.target: frontEnemy | allEnemies | randomEnemy(hits회, 매번 무작위)   heal.target: lowestAlly | allAllies
+  //   buffs: 회복 대상에게 [{ type, duration, value | valueCoef(시전자 ATK 배수) }]
+  G.Characters.CHR_0001 = {
+    id: 'CHR_0001', name: '모카', job: '랜턴 메이지', role: '지원·광역', class: 'Mage', type: 'Main', grade: 4,
+    element: 'Light', blockColor: '#F2994A',
+    baseStats: { hp: 860, atk: 105, def: 30, cri: 0.06, crd: 1.5, eva: 0.05, aspd: 0.8, pen: 0.1 },
+    profile: '마지막 등불지기 마을 "반딧골"의 견습생. 스승의 기억이 담긴 랜턴과 정령 불씨를 데리고 어둠 안개의 근원을 찾아 떠났다.',
+    attackName: '불씨 탄환',
+    lines: {
+      summon: '어, 여기가 어디더라... 아, 전투 중이구나!',
+      skill: '불씨야, 일어나!',
+      victory: '다 같이 불빛 아래서 간식 먹어요!',
+      defeat: '괜찮아요, 불은 다시 켜면 돼요.'
+    },
+    forms: {
+      4: {
+        title: '견습 등불지기', art: 'moka',
+        skills: {
+          name: '등불 마법',
+          chains: [
+            { name: '등불 밝히기', brief: '아군 전체 회복·방어↑',
+              desc: '아군 전체 회복 ATK 25% + 6초 지속 회복(초당 ATK 6%), 8초간 방어력 +30%',
+              heal: { target: 'allAllies', coef: 0.25 },
+              buffs: [{ type: 'Regen', duration: 6, valueCoef: 0.06 }, { type: 'DefUp', duration: 8, value: 0.3 }] },
+            { name: '길 잃은 별', brief: '무작위 적에게 별빛 5회',
+              desc: '무작위 적에게 별빛 5회, 각 ATK 30% 피해 (떨어질 곳은 별 마음대로)',
+              damage: { target: 'randomEnemy', coef: 0.3, hits: 5 } },
+            { name: '반딧불 대행진', brief: '적 전체 피해·아군 회복·정화',
+              desc: '적 전체 ATK 110% 피해, 아군 전체 회복 ATK 50% + 상태이상 해제',
+              damage: { target: 'allEnemies', coef: 1.1 }, heal: { target: 'allAllies', coef: 0.5 }, cleanse: true }
+          ]
+        }
+      },
+      // ★5: 스승의 기억이 하나 돌아와 정식 등불지기가 됨. 망토에 금실·별 장식
+      5: {
+        title: '등불지기', art: 'moka5',
+        profile: '랜턴 속 스승의 기억 하나가 되살아나, 정식 등불지기의 금실 망토를 이어받았다. 불씨도 이제 전투 중에는 잘 졸지 않는다.',
+        skills: {
+          name: '등불 마법',
+          chains: [
+            { name: '등불 밝히기', brief: '아군 전체 회복·방어↑',
+              desc: '아군 전체 회복 ATK 30% + 6초 지속 회복(초당 ATK 8%), 8초간 방어력 +35%',
+              heal: { target: 'allAllies', coef: 0.3 },
+              buffs: [{ type: 'Regen', duration: 6, valueCoef: 0.08 }, { type: 'DefUp', duration: 8, value: 0.35 }] },
+            { name: '길 잃은 별무리', brief: '무작위 적에게 별빛 6회',
+              desc: '무작위 적에게 별빛 6회, 각 ATK 32% 피해',
+              damage: { target: 'randomEnemy', coef: 0.32, hits: 6 } },
+            { name: '반딧불 대행진', brief: '적 전체 피해·아군 회복·정화',
+              desc: '적 전체 ATK 130% 피해, 아군 전체 회복 ATK 60% + 상태이상 해제',
+              damage: { target: 'allEnemies', coef: 1.3 }, heal: { target: 'allAllies', coef: 0.6 }, cleanse: true }
+          ]
+        }
+      },
+      // ★6: 여행에서 만난 영웅들의 추억이 랜턴에 모여 별빛으로 타오름. 기억은 나눌수록 커진다
+      6: {
+        title: '별빛 등불지기', art: 'moka6',
+        profile: '여행에서 만난 영웅들의 추억이 랜턴에 모여 불꽃이 별빛으로 바뀌었다. 기억은 쓰면 사라지는 게 아니라 나눌수록 커진다는 걸 모카는 이제 안다.',
+        skills: {
+          name: '별빛 마법',
+          chains: [
+            { name: '별빛 등불', brief: '아군 전체 회복·방어↑·보호막',
+              desc: '아군 전체 회복 ATK 35% + 6초 지속 회복(초당 ATK 10%), 10초간 방어력 +40%, 보호막 ATK 50%',
+              heal: { target: 'allAllies', coef: 0.35 },
+              buffs: [{ type: 'Regen', duration: 6, valueCoef: 0.1 }, { type: 'DefUp', duration: 10, value: 0.4 },
+                { type: 'Shield', duration: 10, valueCoef: 0.5 }] },
+            { name: '쏟아지는 별', brief: '무작위 적에게 별빛 8회',
+              desc: '무작위 적에게 별빛 8회, 각 ATK 33% 피해',
+              damage: { target: 'randomEnemy', coef: 0.33, hits: 8 } },
+            { name: '은하수 대행진', brief: '적 전체 피해·아군 회복·정화·보호막',
+              desc: '적 전체 ATK 150% 피해, 아군 전체 회복 ATK 70% + 상태이상 해제, 보호막 ATK 40%',
+              damage: { target: 'allEnemies', coef: 1.5 }, heal: { target: 'allAllies', coef: 0.7 }, cleanse: true,
+              buffs: [{ type: 'Shield', duration: 8, valueCoef: 0.4 }] }
+          ]
+        }
+      }
+    }
+  };
+
+  // 등급별 형태를 합친 캐릭터 데이터 (forms 가 없으면 그대로). 전투 유닛·화면 표시에 사용
+  const formCache = {};
+  G.charForm = (data, grade) => {
+    if (!data.forms) return data;
+    const g = Math.max(...Object.keys(data.forms).map(Number).filter(k => k <= (grade || data.grade)), data.grade);
+    const key = data.id + '_' + g;
+    return formCache[key] || (formCache[key] = Object.assign({}, data, data.forms[g], { formGrade: g }));
+  };
 
   // ---- 6.1 / 6.2 적 데이터 ----
   G.Enemies = {

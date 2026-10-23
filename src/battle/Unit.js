@@ -8,13 +8,13 @@
     // opts: { side: 'hero'|'enemy', x, slot, isLeader, grade, level, enhance, statMult, attackDelay, rangeJitter }
     constructor(data, opts) {
       this.uid = nextUid++;
-      this.data = data;
+      this.grade = opts.grade || data.grade || 1;
+      this.data = opts.side === 'hero' ? G.charForm(data, this.grade) : data;   // 메인 캐릭터는 등급별 외형·스킬
       this.side = opts.side;
       this.name = data.name;
       this.slot = opts.slot || 0;
       this.isLeader = !!opts.isLeader;
       this.isBoss = !!data.isBoss;
-      this.grade = opts.grade || data.grade || 1;
       this.level = opts.level || 1;
       this.enhance = opts.enhance || 0;
       this.element = data.element || null;

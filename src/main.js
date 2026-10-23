@@ -207,7 +207,10 @@
 
   function debugBattleOptions() {
     if (/^TWR_\d+$/.test(params.get('stage'))) G.Tower.stage(Number(params.get('stage').slice(4)));
-    const ids = (params.get('party') || '').split(',').filter(id => G.Characters[id]);
+    // party=CHR_0001:6 처럼 ':등급' 을 붙이면 그 등급으로 출전
+    const ids = (params.get('party') || '').split(',')
+      .map(s => { const [charId, grade] = s.split(':'); return { charId, grade: Number(grade) || undefined }; })
+      .filter(p => G.Characters[p.charId]);
     const leader = Number(params.get('leader'));
     return {
       stageId: G.Stages[params.get('stage')] ? params.get('stage') : 'STG_01_01',
@@ -520,6 +523,8 @@
     if (!app.ui.paused && !b.isOver && !tutorial.blocking) {
       acc += real * app.ui.speed;
       while (acc >= STEP) {
+        // 렌더 보간용 직전 스텝 위치 (BattleView 가 px → x 사이를 alpha 로 그림)
+        for (const u of b.heroes.concat(b.enemies)) u.px = u.x;
         b.update(STEP);
         acc -= STEP;
       }
@@ -535,7 +540,7 @@
     }
     const events = b.drainEvents();
     G.Sound.consume(events);
-    return { events, dt: app.ui.paused ? 0 : real * app.ui.speed, ui: app.ui };
+    return { events, dt: app.ui.paused ? 0 : real * app.ui.speed, ui: app.ui, alpha: Math.min(1, acc / STEP) };
   }
 
   const view = new G.BattleView(gameWrap, { tick });

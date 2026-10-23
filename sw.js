@@ -1,13 +1,13 @@
 // 오프라인 실행용 서비스 워커: 네트워크 우선(항상 최신), 실패 시 캐시 사본
 'use strict';
-const CACHE = 'block-chain-rpg-v1';
+const CACHE = 'block-chain-rpg-v2';
 const FILES = [
   './', 'index.html', 'manifest.webmanifest', 'src/ui/style.css', 'vendor/phaser.min.js',
   'src/core.js', 'src/config.js', 'src/rules.js', 'src/data.js',
   'src/battle/StatusEffectSystem.js', 'src/battle/DamageCalculator.js', 'src/battle/Unit.js',
   'src/battle/ChainResolver.js', 'src/battle/BlockManager.js', 'src/battle/SkillExecutor.js',
   'src/battle/BattleManager.js', 'src/meta/Progression.js', 'src/meta/SaveManager.js',
-  'src/ui/PixelArt.js', 'src/ui/BattleView.js', 'src/ui/Sound.js', 'src/ui/Screens.js', 'src/main.js',
+  'src/ui/SpriteData.js', 'src/ui/PixelArt.js', 'src/ui/BattleView.js', 'src/ui/Sound.js', 'src/ui/Screens.js', 'src/main.js',
   'assets/icon-192.png', 'assets/icon-512.png'
 ];
 

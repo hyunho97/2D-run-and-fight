@@ -15,8 +15,8 @@
     return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
   };
 
-  function portrait(data, size) {
-    return `<div class="portrait ${size || ''}" style="--c:${data.blockColor}"><img src="${G.PixelArt.portraitUrl(data)}" alt="${G.Classes[data.class].name}"></div>`;
+  function portrait(data, size, grade) {
+    return `<div class="portrait ${size || ''}" style="--c:${data.blockColor}"><img src="${G.PixelArt.portraitUrl(data, grade)}" alt="${G.Classes[data.class].name}"></div>`;
   }
 
   function topbar(state, title, back) {
@@ -43,7 +43,7 @@
     if (P().isInParty(state, u.uid)) badges.push(`<span class="badge party">${SLOT_LABELS[state.party.members.indexOf(u.uid)]}</span>`);
     return `<button class="unit-tile ${opts.selected ? 'selected' : ''}" data-action="${opts.action}" data-uid="${u.uid}"
         ${opts.extra || ''} ${opts.disabled ? 'disabled' : ''}>
-      ${portrait(data)}
+      ${portrait(data, '', u.grade)}
       <div class="ut-body">
         <div class="ut-name">${esc(data.name)}</div>
         <div class="ut-meta">${stars(u.grade)} ${levelText(u)}</div>
@@ -83,7 +83,7 @@
         const data = P().charOf(u);
         return `<div class="party-chip">
           <span class="slot-label">${SLOT_LABELS[i]}</span>
-          ${portrait(data)}
+          ${portrait(data, '', u.grade)}
           <span class="name">${esc(data.name)}</span>
           <span class="ut-meta">${stars(u.grade)} ${levelText(u)}</span>
           <span class="leader">${i === leader ? '♛ 리더' : ''}</span>
@@ -224,7 +224,7 @@
         const leader = state.party.leaderIndex === i;
         return `<div class="party-slot ${view.partySlot === i ? 'selected' : ''}">
           <span class="slot-label">${SLOT_LABELS[i]}</span>
-          <button data-action="partySlot" data-slot="${i}" aria-label="${SLOT_LABELS[i]} 선택">${portrait(data, 'lg')}</button>
+          <button data-action="partySlot" data-slot="${i}" aria-label="${SLOT_LABELS[i]} 선택">${portrait(data, 'lg', u.grade)}</button>
           <span class="name">${esc(data.name)}</span>
           <span class="ut-meta">${stars(u.grade)} ${levelText(u)}</span>
           <button class="leader-btn ${leader ? 'on' : ''}" data-action="leader" data-slot="${i}">${leader ? '♛ 리더' : '리더 지정'}</button>
@@ -290,7 +290,7 @@
     unit(state, view) {
       const u = P().findUnit(state, view.unitUid);
       if (!u) return Screens.units(state, view);
-      const data = P().charOf(u);
+      const data = G.charForm(P().charOf(u), u.grade);   // 메인 캐릭터는 등급별 칭호·스킬
       const cls = G.Classes[data.class];
       const st = P().unitStats(u);
       const maxLv = G.Rules.maxLevel(u.grade);
@@ -324,18 +324,20 @@
 
       // 진화
       const evoErr = P().evolveError(u);
+      const next = G.charForm(P().charOf(u), u.grade + 1);
+      const evoNote = next.title && next.formGrade > data.formGrade ? `<br>칭호 <b>${esc(next.title)}</b> · 새 외형과 강화된 스킬` : '';
       const evolve = evoErr
         ? `<p>${evoErr}</p>`
-        : `<p>같은 유닛이 ★${u.grade + 1} Lv.1(+0)이 됩니다.</p><button class="btn primary" data-action="evolve" data-uid="${u.uid}">진화</button>`;
+        : `<p>같은 유닛이 ★${u.grade + 1} Lv.1(+0)이 됩니다.${evoNote}</p><button class="btn primary" data-action="evolve" data-uid="${u.uid}">진화</button>`;
 
       return `<div class="screen">
         ${topbar(state, '<h1>유닛 정보</h1>', 'units')}
         <section class="card">
           <div class="detail-head">
-            ${portrait(data, 'lg')}
+            ${portrait(data, 'lg', u.grade)}
             <div style="flex:1;min-width:0">
-              <h2>${esc(data.name)}</h2>
-              <div class="sub">${stars(u.grade)} ${typeBadge(data)} <span>${cls.name} · ${cls.role} · ${cls.range === 'Melee' ? '근거리' : '원거리'}</span>
+              <h2>${data.title ? `<small>${esc(data.title)}</small> ` : ''}${esc(data.name)}</h2>
+              <div class="sub">${stars(u.grade)} ${typeBadge(data)} <span>${data.job || cls.name} · ${data.role || cls.role} · ${cls.range === 'Melee' ? '근거리' : '원거리'}</span>
                 ${P().isInParty(state, u.uid) ? `<span class="badge party">파티 ${SLOT_LABELS[state.party.members.indexOf(u.uid)]}</span>` : ''}</div>
               <div class="sub" style="margin-top:6px">Lv.${u.level} / ${maxLv} ${u.enhance ? `· <b style="color:var(--gem)">+${u.enhance}</b>` : ''}
                 ${isMax ? '· <b style="color:var(--good)">MAX</b>' : `· EXP ${u.exp} / ${G.Rules.expToNext(u.level)}`}</div>
@@ -344,9 +346,14 @@
           </div>
         </section>
         <section class="card"><h3>능력치</h3><div class="stat-grid">${statCells}</div></section>
-        <section class="card"><h3>스킬 · ${esc(skill.name)} <small>같은 직업 기본 유닛 공통</small></h3>
-          <table class="skill-table">${skill.coef.map((c, i) => `<tr><td>${i + 1}체인</td><td>${unitWord}${Math.round(c * 100)}%</td></tr>`).join('')}</table>
-        </section>
+        ${skill.chains
+          ? `<section class="card"><h3>스킬 · ${esc(skill.name)} <small>고유 스킬 · 기본 공격 ${esc(data.attackName || '')}</small></h3>
+              <table class="skill-table">${skill.chains.map((c, i) => `<tr><td>${i + 1}체인</td><td><b>${esc(c.name)}</b><br>${esc(c.desc)}</td></tr>`).join('')}</table>
+            </section>`
+          : `<section class="card"><h3>스킬 · ${esc(skill.name)} <small>같은 직업 기본 유닛 공통</small></h3>
+              <table class="skill-table">${skill.coef.map((c, i) => `<tr><td>${i + 1}체인</td><td>${unitWord}${Math.round(c * 100)}%</td></tr>`).join('')}</table>
+            </section>`}
+        ${data.profile ? `<section class="card"><h3>프로필</h3><p>${esc(data.profile)}</p></section>` : ''}
         <section class="card"><h3>강화 <small>+1 ~ +${C().ENHANCE_MAX}</small></h3><div class="action-row">${enhance}</div></section>
         <section class="card"><h3>합성 <small>★N 최대 레벨 × 2 → 랜덤 ★N+1</small></h3><div class="action-row">${synth}</div></section>
         <section class="card"><h3>진화 <small>메인 캐릭터 전용 · 최대 레벨 + +5</small></h3><div class="action-row">${evolve}</div></section>
@@ -501,7 +508,7 @@
       return `<div class="modal">
         <h2>${title}</h2>
         <div class="reveal">
-          ${portrait(data, 'lg')}
+          ${portrait(data, 'lg', u.grade)}
           <div class="name">${esc(data.name)} ${got.isNew ? '<span class="badge new">NEW</span>' : ''} ${typeBadge(data)}</div>
           <div class="stars">${'★'.repeat(u.grade)}</div>
           <div class="muted">${G.Classes[data.class].name} · ${G.Classes[data.class].role} · Lv.1</div>

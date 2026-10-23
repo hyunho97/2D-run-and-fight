@@ -337,7 +337,7 @@
       if (!group) return false;
       const caster = this.heroes.find(h => h.uid === group.owner);
       if (!caster || !caster.alive || SES().isDisabled(caster)) return false;
-      if (!G.SkillExecutor.canExecute(this, caster)) return false;
+      if (!G.SkillExecutor.canExecute(this, caster, group.length)) return false;
 
       const taken = this.blocks.take(index);
       G.SkillExecutor.execute(this, caster, taken.chain);
@@ -353,10 +353,11 @@
 
       const groups = this.blocks.groups();
       if (!groups.length) return;
-      const kindOf = g => G.SkillExecutor.skillOf(this.heroes.find(h => h.uid === g.owner)).kind;
+      // 메인 캐릭터는 체인 길이마다 스킬이 다르므로 그룹 길이 기준으로 판단 ('both'는 양쪽에 포함)
+      const kindOf = g => G.SkillExecutor.skillAt(this.heroes.find(h => h.uid === g.owner), g.length).kind;
       const longest = list => list.reduce((a, b) => (b.length > a.length ? b : a), list[0]);
 
-      const heals = groups.filter(g => kindOf(g) === 'heal');
+      const heals = groups.filter(g => kindOf(g) !== 'damage');
       const attacks = groups.filter(g => kindOf(g) !== 'heal');
       const alive = this.aliveHeroes();
       const critical = alive.some(h => h.hpRatio < C.AUTO_HEAL_THRESHOLD);
